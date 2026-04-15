@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -8,19 +9,43 @@ from scanbox.adapters.capa import CapaAdapter
 from scanbox.adapters.clamav import ClamAvAdapter
 from scanbox.adapters.yara import YaraAdapter
 from scanbox.config.models import AppConfig
-from scanbox.core.enums import EngineState
-from scanbox.core.errors import ScanBoxError
+from scanbox.core.enums import EngineState, VerdictStatus
+from scanbox.core.errors import InputError, ScanBoxError
 from scanbox.core.filetypes import detect_file_type
 from scanbox.core.hashing import HashingService
-from scanbox.core.models import DISCLAIMER_TEXT, EngineIssue, QuarantineMode, ScanReport, TargetInfo, build_report_shell
+from scanbox.core.models import (
+    DISCLAIMER_TEXT,
+    DirectoryScanEntry,
+    DirectoryScanReport,
+    DirectoryScanSummary,
+    DirectoryTargetInfo,
+    EngineIssue,
+    QuarantineMode,
+    ScanReport,
+    TargetInfo,
+    build_directory_report_shell,
+    build_report_shell,
+)
 from scanbox.core.timeouts import TimeoutPolicy
 from scanbox.pipeline.preflight import apply_preflight
 from scanbox.pipeline.verdicts import VerdictResolver
 from scanbox.quarantine.service import QuarantineService
+from scanbox.targets.directory_target import DirectoryTarget
 from scanbox.targets.file_target import FileTarget
 
 
 class ScanOrchestrator:
+    _DIRECTORY_IGNORE_NAMES = {".git", ".venv", "__pycache__"}
+    _VERDICT_PRIORITY = (
+        "scan_error",
+        "known_malicious",
+        "suspicious",
+        "engine_missing",
+        "engine_unavailable",
+        "partial_scan",
+        "clean_by_known_checks",
+    )
+
     def __init__(self, config: AppConfig, adapters: list[ScannerAdapter] | None = None) -> None:
         self.config = config
         self.adapters = adapters or [ClamAvAdapter(), YaraAdapter(), CapaAdapter()]
@@ -31,7 +56,70 @@ class ScanOrchestrator:
 
     def scan_file(self, file_path: Path, quarantine_mode: QuarantineMode, dry_run_quarantine: bool) -> ScanReport:
         target = FileTarget.from_path(file_path)
-        report = build_report_shell(str(target.path), self.config.app.default_profile)
+        return self._scan_file_target(
+            target=target,
+            original_path=str(target.path),
+            quarantine_mode=quarantine_mode,
+            dry_run_quarantine=dry_run_quarantine,
+        )
+
+    def scan_directory(
+        self,
+        directory_path: Path,
+        quarantine_mode: QuarantineMode,
+        dry_run_quarantine: bool,
+    ) -> DirectoryScanReport:
+        target = DirectoryTarget.from_path(directory_path)
+        report = build_directory_report_shell(str(target.path), self.config.app.default_profile)
+        report.started_at = datetime.now(timezone.utc)
+
+        candidates, directory_issues = self._enumerate_directory_files(target.path)
+        report.target = DirectoryTargetInfo(
+            original_path=str(directory_path),
+            normalized_path=str(target.path),
+            recursive=target.recursive,
+        )
+        report.target_count = len(candidates)
+        report.issues.extend(directory_issues)
+
+        for relative_path, absolute_path in candidates:
+            child_report = self._scan_directory_entry(
+                file_path=absolute_path,
+                quarantine_mode=quarantine_mode,
+                dry_run_quarantine=dry_run_quarantine,
+            )
+            report.results.append(
+                DirectoryScanEntry(
+                    relative_path=relative_path,
+                    report=child_report,
+                )
+            )
+
+        report.scanned_count = len(report.results)
+        report.summary = self._build_directory_summary(report.results)
+        report.error_count = report.summary.scan_error + len(report.issues)
+        report.overall_status = self._resolve_directory_overall_status(report.results)
+        if not report.results:
+            report.issues.append(
+                EngineIssue(
+                    engine="scanbox",
+                    code="no_files_found",
+                    message="Directory scan found no files after applying the default ignore rules.",
+                    details={"path": str(target.path)},
+                )
+            )
+            report.error_count = report.summary.scan_error + len(report.issues)
+        report.ended_at = datetime.now(timezone.utc)
+        return report
+
+    def _scan_file_target(
+        self,
+        target: FileTarget,
+        original_path: str,
+        quarantine_mode: QuarantineMode,
+        dry_run_quarantine: bool,
+    ) -> ScanReport:
+        report = build_report_shell(original_path, self.config.app.default_profile)
         report.quarantine.requested_mode = quarantine_mode.value
         report.started_at = datetime.now(timezone.utc)
 
@@ -39,7 +127,7 @@ class ScanOrchestrator:
             report.hashes = self.hashing.compute(target.path, include_sha1=True)
             file_type = detect_file_type(target.path)
             report.target = TargetInfo(
-                original_path=str(file_path),
+                original_path=original_path,
                 normalized_path=str(target.path),
                 size=target.size,
                 detected_type=file_type.kind,
@@ -84,3 +172,84 @@ class ScanOrchestrator:
             "suspicious_hits": len([d for d in detections if d.category == "suspicious"]),
             "status": report.overall_status.value,
         }
+
+    def _scan_directory_entry(
+        self,
+        file_path: Path,
+        quarantine_mode: QuarantineMode,
+        dry_run_quarantine: bool,
+    ) -> ScanReport:
+        try:
+            target = FileTarget.from_path(file_path)
+        except InputError as exc:
+            return self._build_file_error_report(file_path, "file_access_error", str(exc))
+        except OSError as exc:
+            return self._build_file_error_report(file_path, "file_access_error", str(exc))
+
+        return self._scan_file_target(
+            target=target,
+            original_path=str(target.path),
+            quarantine_mode=quarantine_mode,
+            dry_run_quarantine=dry_run_quarantine,
+        )
+
+    def _enumerate_directory_files(self, root_path: Path) -> tuple[list[tuple[str, Path]], list[EngineIssue]]:
+        candidates: list[tuple[str, Path]] = []
+        issues: list[EngineIssue] = []
+
+        def _on_error(error: OSError) -> None:
+            issues.append(
+                EngineIssue(
+                    engine="scanbox",
+                    code="directory_access_error",
+                    message=str(error),
+                    details={"path": error.filename or str(root_path)},
+                )
+            )
+
+        for current_root, dir_names, file_names in os.walk(root_path, topdown=True, onerror=_on_error, followlinks=False):
+            dir_names[:] = [name for name in dir_names if name not in self._DIRECTORY_IGNORE_NAMES]
+            current_root_path = Path(current_root)
+            for file_name in file_names:
+                absolute_path = (current_root_path / file_name).resolve()
+                relative_path = absolute_path.relative_to(root_path).as_posix()
+                candidates.append((relative_path, absolute_path))
+
+        candidates.sort(key=lambda item: item[0])
+        return candidates, issues
+
+    def _build_directory_summary(self, results: list[DirectoryScanEntry]) -> DirectoryScanSummary:
+        summary = DirectoryScanSummary()
+        for entry in results:
+            status = entry.report.overall_status.value
+            if hasattr(summary, status):
+                current_value = getattr(summary, status)
+                setattr(summary, status, current_value + 1)
+        return summary
+
+    def _resolve_directory_overall_status(self, results: list[DirectoryScanEntry]) -> VerdictStatus:
+        if not results:
+            return VerdictStatus.SCAN_ERROR
+
+        present_statuses = {entry.report.overall_status.value for entry in results}
+        for status in self._VERDICT_PRIORITY:
+            if status in present_statuses:
+                return VerdictStatus(status)
+
+        return VerdictStatus.SCAN_ERROR
+
+    def _build_file_error_report(self, file_path: Path, code: str, message: str) -> ScanReport:
+        report = build_report_shell(str(file_path), self.config.app.default_profile)
+        report.started_at = datetime.now(timezone.utc)
+        report.ended_at = datetime.now(timezone.utc)
+        report.target = TargetInfo(
+            original_path=str(file_path),
+            normalized_path=str(file_path),
+            size=0,
+            detected_type="unknown",
+        )
+        report.issues.append(EngineIssue(engine="scanbox", code=code, message=message))
+        report.overall_status = self.verdicts.resolve(report)
+        report.summary = self._build_summary(report)
+        report.disclaimer = DISCLAIMER_TEXT
+        return report

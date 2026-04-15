@@ -928,3 +928,115 @@ Important boundary:
 - the repo-root `quarantine/` directory is local workstation state, not committed baseline
 - V2.1 acceptance uses its own timestamped output directory and its own quarantine directory for the run
 - do not treat local audit sidecars or payloads under repo-root `quarantine/` as golden outputs
+
+## 13. Directory scan MVP
+
+V2.2-A adds a directory scan mode on top of the existing `scan` command:
+
+```powershell
+.\.venv\Scripts\python.exe -m scanbox scan .\tests\fixtures\directory_mvp
+```
+
+### 13.1 Current behavior
+
+- directory scan is recursive by default
+- execution is serial
+- directories themselves are not scanned
+- child results reuse the existing single-file `ScanReport`
+- top-level output is a separate directory summary report
+
+### 13.2 Top-level fields
+
+Directory scan adds these top-level fields:
+
+- `mode = "directory"`
+- `target_count`
+- `scanned_count`
+- `error_count`
+- `summary`
+- `results`
+
+`summary` is only a count of child result verdicts:
+
+- `known_malicious`
+- `suspicious`
+- `clean_by_known_checks`
+- `partial_scan`
+- `scan_error`
+- `engine_missing`
+- `engine_unavailable`
+
+The top-level `overall_status` is also derived only from child result verdicts, using the same priority order as single-file scanning.
+
+### 13.3 Default detail and full reports
+
+- default `stdout` stays on the focused detail level
+- the top-level directory report uses default detail
+- every child result in `results[]` also uses default detail
+- `--report-out` is still the full report path for both the directory wrapper and every child result
+
+### 13.4 Sorting and ignore rules
+
+`results[]` are always sorted by relative path in lexicographic order. Treat this as a stable contract.
+
+Phase 1 ignore rules are fixed to these directory names:
+
+- `.git`
+- `.venv`
+- `__pycache__`
+
+### 13.5 Failure behavior
+
+- inaccessible subdirectories become top-level `issues[]` entries such as `directory_access_error`
+- individual file failures become child results with `overall_status = scan_error`
+- if no files are found after ignore rules, the directory report returns:
+  - `target_count = 0`
+  - `scanned_count = 0`
+  - `overall_status = scan_error`
+  - issue code `no_files_found`
+
+### 13.6 Directory quarantine boundary
+
+Phase 1 does not support batch quarantine from directory mode.
+
+These inputs are rejected with structured `input_error`:
+
+- `scanbox scan <directory> --quarantine move`
+- `scanbox scan <directory> --dry-run-quarantine`
+
+### 13.7 V2.2-A freeze and acceptance boundary
+
+Treat directory scanning as its own freeze baseline on top of the earlier milestones:
+
+- v1: single-file scanning baseline
+- V2.1: quarantine lifecycle baseline
+- V2.2-A: directory scanning baseline
+
+The dedicated acceptance entrypoint is:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_directory.ps1
+```
+
+That script validates the minimum V2.2-A path:
+
+- editable install
+- `pytest -q`
+- directory fixture scan
+- directory summary assertions
+- stable `results[]` ordering
+- `--report-out` file generation and JSON parsing
+
+Artifacts are written to:
+
+```text
+reports/acceptance-v2-directory/<timestamp>/
+```
+
+These are local run artifacts, not committed repository baseline files.
+
+V2.2-A currently does **not** use committed golden outputs for directory mode. The baseline is defined by:
+
+- `tests/fixtures/directory_mvp`
+- structured assertions in tests and acceptance
+- optional manual inspection of the full report

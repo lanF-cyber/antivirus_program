@@ -1,6 +1,6 @@
 # ScanBox
 
-ScanBox is a Windows-first local file security scanning orchestrator. It does not implement its own antivirus engine. Instead, it coordinates mature open source scanners, normalizes their results, and emits a single JSON report for a single file target.
+ScanBox is a Windows-first local security scanning orchestrator. It does not implement its own antivirus engine. Instead, it coordinates mature open source scanners, normalizes their results, and emits a single JSON report for a single file target or a directory scan summary report for a directory target.
 
 ## 当前定位
 
@@ -55,7 +55,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v1.ps1 -IncludeLoc
 ## Current scope
 
 - Python CLI first
-- Single-file scanning only
+- Single-file scanning plus directory scan MVP
 - Hashing: SHA256, MD5, optional SHA1
 - External engines:
   - ClamAV
@@ -74,7 +74,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v1.ps1 -IncludeLoc
 - GUI
 - Native Windows drag-and-drop shell integration
 - EXE packaging
-- Multi-file or directory scanning
+- Concurrent or complex batch scanning
 - Automatic downloads or implicit network access
 - Claims that "no detection" means "safe"
 
@@ -93,6 +93,23 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m scanbox scan .\.venv\Scripts\python.exe --report-out .\reports\python-full.json
 ```
 
+## V2.2-A directory scan MVP
+
+Directory scanning now supports a minimal recursive, serial MVP:
+
+```powershell
+.\.venv\Scripts\python.exe -m scanbox scan .\tests\fixtures\directory_mvp
+```
+
+Current V2.2-A boundary:
+
+- recursive directory walking
+- serial per-file scanning
+- stable `results[]` ordering by relative path
+- top-level summary JSON that reuses single-file `ScanReport` for each child result
+- `stdout` stays on default detail, `--report-out` stays full
+- no batch quarantine for directory mode
+
 ## Exit codes
 
 - `0`: clean-by-known-checks scan completed
@@ -109,6 +126,7 @@ python -m venv .venv
 
 - [v1 Freeze](docs/milestones/scanbox-v1-freeze.md)
 - [V2.1 Quarantine Freeze](docs/milestones/scanbox-v2-quarantine.md)
+- [V2.2-A Directory Freeze](docs/milestones/scanbox-v2.2-directory-mvp.md)
 - [Operations](docs/operations.md)
 - [Architecture](docs/architecture.md)
 - [Dependencies](docs/dependencies.md)
@@ -130,23 +148,30 @@ Safety defaults:
 - `restore` rejects path conflicts by default
 - `delete` requires explicit `--yes`
 
-## V2.1 freeze entrypoint
+## Freeze entrypoints
 
-The repository now has two distinct baselines:
+The repository now has three distinct baselines:
 
 - v1 scanning baseline
 - V2.1 quarantine lifecycle baseline
+- V2.2-A directory scanning baseline
 
 Recommended entrypoints:
 
 1. [v1 Freeze](docs/milestones/scanbox-v1-freeze.md)
 2. [V2.1 Quarantine Freeze](docs/milestones/scanbox-v2-quarantine.md)
-3. [Operations](docs/operations.md)
-4. Pick the acceptance script that matches the goal:
+3. [V2.2-A Directory Freeze](docs/milestones/scanbox-v2.2-directory-mvp.md)
+4. [Operations](docs/operations.md)
+5. Pick the acceptance script that matches the goal:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v1.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_quarantine.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_directory.ps1
 ```
 
-Use `acceptance_v1.ps1` for the scanning baseline and `acceptance_v2_quarantine.ps1` for the quarantine lifecycle baseline.
+Use:
+
+- `acceptance_v1.ps1` for the single-file scanning baseline
+- `acceptance_v2_quarantine.ps1` for the quarantine lifecycle baseline
+- `acceptance_v2_directory.ps1` for the directory scanning baseline

@@ -29,6 +29,12 @@ class TargetInfo(BaseModel):
     mime_guess: str | None = None
 
 
+class DirectoryTargetInfo(BaseModel):
+    original_path: str
+    normalized_path: str
+    recursive: bool = True
+
+
 class RuleSetInfo(BaseModel):
     name: str
     version: str
@@ -124,6 +130,45 @@ class ScanReport(BaseModel):
     summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class DirectoryScanEntry(BaseModel):
+    relative_path: str
+    report: ScanReport
+
+
+class DirectoryScanSummary(BaseModel):
+    known_malicious: int = 0
+    suspicious: int = 0
+    clean_by_known_checks: int = 0
+    partial_scan: int = 0
+    scan_error: int = 0
+    engine_missing: int = 0
+    engine_unavailable: int = 0
+
+
+class DirectoryScanReport(BaseModel):
+    schema_version: str = "1.0.0"
+    scanbox_version: str = __version__
+    scan_id: str = Field(default_factory=lambda: uuid4().hex)
+    mode: Literal["directory"] = "directory"
+    profile: ScanProfile = ScanProfile.BALANCED
+    disclaimer: str = DISCLAIMER_TEXT
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ended_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    target: DirectoryTargetInfo = Field(
+        default_factory=lambda: DirectoryTargetInfo(
+            original_path="",
+            normalized_path="",
+        )
+    )
+    target_count: int = 0
+    scanned_count: int = 0
+    error_count: int = 0
+    overall_status: VerdictStatus = VerdictStatus.SCAN_ERROR
+    issues: list[EngineIssue] = Field(default_factory=list)
+    summary: DirectoryScanSummary = Field(default_factory=DirectoryScanSummary)
+    results: list[DirectoryScanEntry] = Field(default_factory=list)
+
+
 def build_report_shell(original_path: str, profile: ScanProfile) -> ScanReport:
     return ScanReport(
         profile=profile,
@@ -134,4 +179,15 @@ def build_report_shell(original_path: str, profile: ScanProfile) -> ScanReport:
             detected_type="unknown",
         ),
         quarantine=QuarantineAction(requested_mode=QuarantineMode.ASK.value),
+    )
+
+
+def build_directory_report_shell(original_path: str, profile: ScanProfile) -> DirectoryScanReport:
+    return DirectoryScanReport(
+        profile=profile,
+        target=DirectoryTargetInfo(
+            original_path=original_path,
+            normalized_path=original_path,
+            recursive=True,
+        ),
     )

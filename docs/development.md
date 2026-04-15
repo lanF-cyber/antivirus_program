@@ -224,3 +224,68 @@ reports/acceptance-v2-quarantine/<timestamp>/
 ```
 
 and overrides the quarantine directory for the run, so it does not depend on the repo-root `quarantine/` directory.
+
+## V2.2-A directory scan MVP
+
+Directory scanning now has a minimal serial MVP that keeps the existing single-file scan core intact.
+
+Minimal local command:
+
+```powershell
+.\.venv\Scripts\python.exe -m scanbox scan .\tests\fixtures\directory_mvp
+```
+
+Optional full report for manual review:
+
+```powershell
+.\.venv\Scripts\python.exe -m scanbox scan .\tests\fixtures\directory_mvp --report-out .\reports\directory-mvp.full.json
+```
+
+Current boundary:
+
+- recursive by default
+- serial execution only
+- stable `results[]` ordering by relative path
+- child results still use the single-file `ScanReport`
+- no batch quarantine in directory mode
+
+Directory scan regression currently rides on the normal test suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+## V2.2-A freeze note
+
+Directory scanning now has its own acceptance baseline:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_directory.ps1
+```
+
+Do not treat it as a replacement for:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v1.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_quarantine.ps1
+```
+
+Current split:
+
+- `acceptance_v1.ps1`: single-file scanning baseline
+- `acceptance_v2_quarantine.ps1`: quarantine lifecycle baseline
+- `acceptance_v2_directory.ps1`: directory scanning baseline
+
+The V2.2-A script writes to:
+
+```text
+reports/acceptance-v2-directory/<timestamp>/
+```
+
+The full report path is fixed to:
+
+```text
+reports/acceptance-v2-directory/<timestamp>/directory.full.json
+```
+
+These are local artifacts only. V2.2-A does not add committed golden outputs for directory mode in this freeze.

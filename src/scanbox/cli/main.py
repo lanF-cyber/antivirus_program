@@ -18,7 +18,7 @@ from scanbox.quarantine.models import (
     QuarantineRecordState,
 )
 from scanbox.quarantine.service import QuarantineService
-from scanbox.reporting.json_report import build_error_report, emit_report
+from scanbox.reporting.json_report import build_directory_error_report, build_error_report, emit_report
 
 
 EXIT_CODES: dict[str, int] = {
@@ -35,12 +35,12 @@ EXIT_CODES: dict[str, int] = {
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="scanbox", description="Scan a single local file and emit a unified JSON report.")
+    parser = argparse.ArgumentParser(prog="scanbox", description="Scan a local file or directory and emit a unified JSON report.")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    scan_parser = subparsers.add_parser("scan", help="Scan a single file target.")
-    scan_parser.add_argument("file_path", help="Path to the file to scan.")
+    scan_parser = subparsers.add_parser("scan", help="Scan a file or directory target.")
+    scan_parser.add_argument("file_path", help="Path to the file or directory to scan.")
     scan_parser.add_argument("--config", default="config/scanbox.toml", help="Path to the ScanBox TOML config.")
     scan_parser.add_argument(
         "--profile",
@@ -96,53 +96,47 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run_scan_command(args: argparse.Namespace) -> int:
     try:
+        input_path = Path(args.file_path)
+        is_directory_target = _looks_like_directory_target(input_path)
+        if is_directory_target and (
+            args.quarantine == QuarantineMode.MOVE.value or args.dry_run_quarantine
+        ):
+            raise InputError("Directory scanning does not support --quarantine move or --dry-run-quarantine in V2.2-A.")
+
         config = load_app_config(
             config_path=Path(args.config),
             profile_override=args.profile,
             verbose_override=args.verbose,
         )
         orchestrator = ScanOrchestrator(config)
-        report = orchestrator.scan_file(
-            file_path=Path(args.file_path),
-            quarantine_mode=QuarantineMode(args.quarantine),
-            dry_run_quarantine=args.dry_run_quarantine,
-        )
+        if is_directory_target:
+            report = orchestrator.scan_directory(
+                directory_path=input_path,
+                quarantine_mode=QuarantineMode(args.quarantine),
+                dry_run_quarantine=args.dry_run_quarantine,
+            )
+        else:
+            report = orchestrator.scan_file(
+                file_path=input_path,
+                quarantine_mode=QuarantineMode(args.quarantine),
+                dry_run_quarantine=args.dry_run_quarantine,
+            )
         emit_report(report, report_out=Path(args.report_out) if args.report_out else None)
         return EXIT_CODES.get(report.overall_status.value, 6)
     except ConfigError as exc:
-        report = build_error_report(
-            original_path=str(getattr(args, "file_path", "")),
-            error_code="config_error",
-            error_message=str(exc),
-            scanbox_version=__version__,
-        )
+        report = _build_scan_error_payload(args, "config_error", str(exc))
         emit_report(report, report_out=Path(args.report_out) if getattr(args, "report_out", None) else None)
         return EXIT_CODES["config_error"]
     except InputError as exc:
-        report = build_error_report(
-            original_path=str(getattr(args, "file_path", "")),
-            error_code="input_error",
-            error_message=str(exc),
-            scanbox_version=__version__,
-        )
+        report = _build_scan_error_payload(args, "input_error", str(exc))
         emit_report(report, report_out=Path(args.report_out) if getattr(args, "report_out", None) else None)
         return EXIT_CODES["input_error"]
     except ScanBoxError as exc:
-        report = build_error_report(
-            original_path=str(getattr(args, "file_path", "")),
-            error_code="scan_error",
-            error_message=str(exc),
-            scanbox_version=__version__,
-        )
+        report = _build_scan_error_payload(args, "scan_error", str(exc))
         emit_report(report, report_out=Path(args.report_out) if getattr(args, "report_out", None) else None)
         return EXIT_CODES[VerdictStatus.SCAN_ERROR.value]
     except Exception as exc:  # noqa: BLE001
-        report = build_error_report(
-            original_path=str(getattr(args, "file_path", "")),
-            error_code="internal_error",
-            error_message=str(exc),
-            scanbox_version=__version__,
-        )
+        report = _build_scan_error_payload(args, "internal_error", str(exc))
         emit_report(report, report_out=Path(args.report_out) if getattr(args, "report_out", None) else None)
         return EXIT_CODES[VerdictStatus.SCAN_ERROR.value]
 
@@ -211,3 +205,29 @@ def _emit_json_payload(payload: object) -> None:
 
 def entrypoint() -> None:
     raise SystemExit(main())
+
+
+def _looks_like_directory_target(path: Path) -> bool:
+    try:
+        resolved = path if path.is_absolute() else (Path.cwd() / path)
+        resolved = resolved.resolve()
+    except OSError:
+        return False
+    return resolved.exists() and resolved.is_dir()
+
+
+def _build_scan_error_payload(args: argparse.Namespace, error_code: str, error_message: str) -> object:
+    original_path = str(getattr(args, "file_path", ""))
+    if _looks_like_directory_target(Path(original_path)):
+        return build_directory_error_report(
+            original_path=original_path,
+            error_code=error_code,
+            error_message=error_message,
+            scanbox_version=__version__,
+        )
+    return build_error_report(
+        original_path=original_path,
+        error_code=error_code,
+        error_message=error_message,
+        scanbox_version=__version__,
+    )
