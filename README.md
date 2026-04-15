@@ -127,6 +127,8 @@ Current V2.2-A boundary:
 - [v1 Freeze](docs/milestones/scanbox-v1-freeze.md)
 - [V2.1 Quarantine Freeze](docs/milestones/scanbox-v2-quarantine.md)
 - [V2.2-A Directory Freeze](docs/milestones/scanbox-v2.2-directory-mvp.md)
+- [Changelog](CHANGELOG.md)
+- [Demo Flow](docs/demo.md)
 - [Operations](docs/operations.md)
 - [Architecture](docs/architecture.md)
 - [Dependencies](docs/dependencies.md)
