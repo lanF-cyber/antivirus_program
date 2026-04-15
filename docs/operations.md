@@ -824,3 +824,107 @@ docs/milestones/golden/
 ```
 
 7. 本地 `reports/` 只用于复盘，不要把它们当 committed baseline。
+## 12. Quarantine lifecycle
+
+V2 Phase 1 adds a dedicated quarantine management surface on top of the existing scan-time move action.
+
+### 12.1 Commands
+
+```powershell
+.\.venv\Scripts\python.exe -m scanbox quarantine list
+.\.venv\Scripts\python.exe -m scanbox quarantine restore <scan_id>
+.\.venv\Scripts\python.exe -m scanbox quarantine delete <scan_id> --yes
+```
+
+### 12.2 What `list` shows
+
+`scanbox quarantine list` intentionally returns only record-level summaries in Phase 1. It does not expand the full append-only `events` history.
+
+Each record summary includes:
+
+- `scan_id`
+- `state`
+- `original_path`
+- `quarantine_path`
+- `hashes.sha256`
+- `moved_at`
+- `audit_path`
+- `payload_exists`
+
+### 12.3 State rules
+
+Lifecycle states are:
+
+- `quarantined`
+- `restored`
+- `deleted`
+- `unknown`
+
+Legacy compatibility is conservative:
+
+- if the payload still exists and the audit sidecar has no explicit `state`, the record is inferred as `quarantined`
+- if the payload does not exist and the audit sidecar has no explicit `state`, the record becomes `unknown`
+- `unknown` records carry structured issues such as `legacy_state_missing`
+
+### 12.4 Restore safety
+
+- Default locator: `scan_id`
+- Default restore target: the stored `original_path`
+- If the restore target already exists, restore is rejected
+- Restore does not auto-rename and does not overwrite existing files
+- If the target parent directory does not exist, restore is rejected instead of creating directories implicitly
+
+### 12.5 Delete safety
+
+- `delete` requires explicit `--yes`
+- There is no interactive prompt in Phase 1
+- There is no batch delete in Phase 1
+- Delete removes only the quarantined payload
+- The audit sidecar remains in place and is updated to `state = deleted`
+
+### 12.6 Audit behavior
+
+The audit sidecar remains the single source of truth for quarantine lifecycle data.
+
+Phase 1 minimum audit fields include:
+
+- `scan_id`
+- `overall_status`
+- `hashes`
+- `original_path`
+- `quarantine_path`
+- `moved_at`
+- `reason`
+- `state`
+- `state_changed_at`
+- `restore_target_path`
+- `delete_reason`
+- `events`
+
+`events` are append-only:
+
+- successful restore/delete operations append a new event
+- previous events are preserved
+- failed restore/delete attempts do not rewrite audit history
+
+### 12.7 V2.1 freeze and acceptance boundary
+
+Treat quarantine lifecycle as a separate small milestone from the frozen v1 scanning baseline.
+
+Use these entrypoints:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v1.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_quarantine.ps1
+```
+
+Interpretation:
+
+- `acceptance_v1.ps1` verifies the scanning baseline
+- `acceptance_v2_quarantine.ps1` verifies quarantine lifecycle only
+
+Important boundary:
+
+- the repo-root `quarantine/` directory is local workstation state, not committed baseline
+- V2.1 acceptance uses its own timestamped output directory and its own quarantine directory for the run
+- do not treat local audit sidecars or payloads under repo-root `quarantine/` as golden outputs

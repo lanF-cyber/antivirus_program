@@ -64,6 +64,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v1.ps1 -IncludeLoc
 - Unified JSON reporting
 - Structured engine errors and timeouts
 - Optional quarantine move with audit metadata
+- Quarantine lifecycle management via:
+  - `scanbox quarantine list`
+  - `scanbox quarantine restore <scan_id>`
+  - `scanbox quarantine delete <scan_id> --yes`
 
 ## Non-goals for v1
 
@@ -104,7 +108,45 @@ python -m venv .venv
 ## Documentation
 
 - [v1 Freeze](docs/milestones/scanbox-v1-freeze.md)
+- [V2.1 Quarantine Freeze](docs/milestones/scanbox-v2-quarantine.md)
 - [Operations](docs/operations.md)
 - [Architecture](docs/architecture.md)
 - [Dependencies](docs/dependencies.md)
 - [Development](docs/development.md)
+
+## V2 Phase 1 note
+
+Quarantine is no longer only a scan-time move action. The current baseline also supports lifecycle management:
+
+```powershell
+.\.venv\Scripts\python.exe -m scanbox quarantine list
+.\.venv\Scripts\python.exe -m scanbox quarantine restore <scan_id>
+.\.venv\Scripts\python.exe -m scanbox quarantine delete <scan_id> --yes
+```
+
+Safety defaults:
+
+- `list` returns record summaries only and does not expand full event history
+- `restore` rejects path conflicts by default
+- `delete` requires explicit `--yes`
+
+## V2.1 freeze entrypoint
+
+The repository now has two distinct baselines:
+
+- v1 scanning baseline
+- V2.1 quarantine lifecycle baseline
+
+Recommended entrypoints:
+
+1. [v1 Freeze](docs/milestones/scanbox-v1-freeze.md)
+2. [V2.1 Quarantine Freeze](docs/milestones/scanbox-v2-quarantine.md)
+3. [Operations](docs/operations.md)
+4. Pick the acceptance script that matches the goal:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v1.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_quarantine.ps1
+```
+
+Use `acceptance_v1.ps1` for the scanning baseline and `acceptance_v2_quarantine.ps1` for the quarantine lifecycle baseline.

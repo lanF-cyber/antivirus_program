@@ -6,5 +6,6 @@ __pycache__/
 *.egg-info/
 .local-tools/
 reports/
+/quarantine/
 config/scanbox.local.toml
 config/clamav/freshclam.local.conf

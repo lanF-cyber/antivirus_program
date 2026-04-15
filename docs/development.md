@@ -52,6 +52,29 @@ Milestone snapshot entrypoint:
 
 - [scanbox-v1-freeze.md](milestones/scanbox-v1-freeze.md)
 
+## Quarantine lifecycle development
+
+V2 Phase 1 keeps quarantine lifecycle work out of the frozen v1 acceptance baseline. Use the normal scan flow to create a quarantined record, then manage it with the dedicated subcommands.
+
+Minimal manual flow:
+
+```powershell
+.\.venv\Scripts\python.exe -m scanbox scan .\tests\fixtures\eicar\eicar.com --quarantine move
+.\.venv\Scripts\python.exe -m scanbox quarantine list
+.\.venv\Scripts\python.exe -m scanbox quarantine restore <scan_id>
+.\.venv\Scripts\python.exe -m scanbox quarantine delete <scan_id> --yes
+```
+
+Behavioral guardrails:
+
+- `list` only returns record summaries, not full `events`
+- `restore` defaults to the stored `original_path`
+- `restore` rejects an existing target path instead of overwriting it
+- `delete` requires `--yes` and only removes the payload, not the audit sidecar
+- legacy records without an explicit `state` are handled conservatively:
+  - payload present -> inferred `quarantined`
+  - payload missing -> `unknown` with structured issues
+
 ## Manual ClamAV continuation
 
 If `verify_env.ps1` reports `executable_missing`, `database_missing`, `database_empty`, or `configured_path_invalid` for ClamAV, continue from the official pinned Windows package recorded in [dependencies.md](dependencies.md).
@@ -174,3 +197,30 @@ If you want the full debugging report on disk while keeping a focused JSON on st
 - v1 intentionally supports one file path per invocation.
 - For daily maintenance, prefer [Operations](operations.md) as the primary entrypoint.
 - For the current frozen milestone snapshot, start from [scanbox-v1-freeze.md](milestones/scanbox-v1-freeze.md).
+
+## V2.1 freeze note
+
+Quarantine lifecycle now has its own acceptance baseline:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_quarantine.ps1
+```
+
+Do not treat it as a replacement for:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v1.ps1
+```
+
+Current split:
+
+- `acceptance_v1.ps1`: scanning baseline
+- `acceptance_v2_quarantine.ps1`: quarantine lifecycle baseline
+
+The V2.1 script writes to:
+
+```text
+reports/acceptance-v2-quarantine/<timestamp>/
+```
+
+and overrides the quarantine directory for the run, so it does not depend on the repo-root `quarantine/` directory.
