@@ -1,0 +1,10 @@
+.venv/
+.pytest_cache/
+.pytest_tmp/
+pytest-cache-files-*/
+__pycache__/
+*.egg-info/
+.local-tools/
+reports/
+config/scanbox.local.toml
+config/clamav/freshclam.local.conf

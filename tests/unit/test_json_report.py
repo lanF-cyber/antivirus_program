@@ -1,0 +1,100 @@
+import json
+from pathlib import Path
+
+from scanbox.core.enums import EngineState, ScanProfile, VerdictStatus
+from scanbox.core.models import EngineScanResult, QuarantineAction, ScanReport, TargetInfo
+from scanbox.reporting.json_report import ReportDetailLevel, emit_report, serialize_report
+
+
+def make_report() -> ScanReport:
+    report = ScanReport(
+        profile=ScanProfile.BALANCED,
+        overall_status=VerdictStatus.CLEAN_BY_KNOWN_CHECKS,
+        target=TargetInfo(
+            original_path="sample.exe",
+            normalized_path=str(Path("sample.exe").resolve()),
+            size=123,
+            detected_type="pe",
+            extension=".exe",
+            mime_guess="application/vnd.microsoft.portable-executable",
+        ),
+        quarantine=QuarantineAction(requested_mode="ask"),
+    )
+    report.engines = {
+        "capa": EngineScanResult(
+            engine="capa",
+            enabled=True,
+            applicable=True,
+            state=EngineState.OK,
+            raw_summary={
+                "command": ["capa.exe", "--json", "sample.exe"],
+                "returncode": 0,
+                "runtime_temp_dir": "C:\\temp\\scanbox-capa",
+                "rule_count": 21,
+                "analysis_summary": {
+                    "capa_version": "9.3.1",
+                    "flavor": "static",
+                    "format": "pe",
+                    "arch": "amd64",
+                    "os": "windows",
+                    "extractor": "VivisectFeatureExtractor",
+                    "matched_rule_count": 21,
+                },
+                "meta": {
+                    "version": "9.3.1",
+                    "analysis": {
+                        "layout": {"functions": [1, 2, 3]},
+                    },
+                },
+            },
+        )
+    }
+    report.summary = {"status": report.overall_status.value}
+    return report
+
+
+def test_serialize_report_default_compacts_capa_raw_summary() -> None:
+    report = make_report()
+
+    payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    raw_summary = payload["engines"]["capa"]["raw_summary"]
+
+    assert raw_summary == {
+        "returncode": 0,
+        "rule_count": 21,
+        "runtime_temp_dir": "C:\\temp\\scanbox-capa",
+        "analysis_summary": {
+            "capa_version": "9.3.1",
+            "flavor": "static",
+            "format": "pe",
+            "arch": "amd64",
+            "os": "windows",
+            "extractor": "VivisectFeatureExtractor",
+            "matched_rule_count": 21,
+        },
+    }
+
+
+def test_serialize_report_full_keeps_capa_meta() -> None:
+    report = make_report()
+
+    payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
+    raw_summary = payload["engines"]["capa"]["raw_summary"]
+
+    assert "meta" in raw_summary
+    assert "command" in raw_summary
+    assert raw_summary["meta"]["analysis"]["layout"] == {"functions": [1, 2, 3]}
+
+
+def test_emit_report_uses_default_for_stdout_and_full_for_report_out(capsys, tmp_path: Path) -> None:
+    report = make_report()
+    output_path = tmp_path / "report.json"
+
+    emit_report(report, report_out=output_path)
+
+    stdout_payload = json.loads(capsys.readouterr().out)
+    file_payload = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert "meta" not in stdout_payload["engines"]["capa"]["raw_summary"]
+    assert "meta" in file_payload["engines"]["capa"]["raw_summary"]
+    assert stdout_payload["overall_status"] == file_payload["overall_status"]

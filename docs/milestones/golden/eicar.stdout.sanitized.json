@@ -1,0 +1,97 @@
+{
+  "kind": "scanbox-v1-golden-output",
+  "detail": "stdout_default_sanitized_subset",
+  "sample": "tests/fixtures/eicar/eicar.com",
+  "overall_status": "known_malicious",
+  "target": {
+    "original_path": "tests/fixtures/eicar/eicar.com",
+    "detected_type": "generic_file",
+    "extension": ".com",
+    "mime_guess": "application/octet-stream"
+  },
+  "hashes": {
+    "sha256": "131f95c51cc819465fa1797f6ccacf9d494aaaff46fa3eac73ae63ffbdfd8267",
+    "md5": "69630e4574ec6798239b091cda43dca0",
+    "sha1": "cf8bd9dfddff007f75adf4c2be48005cea317c62"
+  },
+  "engines": {
+    "clamav": {
+      "state": "ok",
+      "detections": [
+        {
+          "source": "clamav",
+          "rule_id": "Eicar-Signature",
+          "title": "Eicar-Signature",
+          "severity": "high",
+          "confidence": "high",
+          "category": "malicious",
+          "description": "ClamAV reported a malicious signature hit.",
+          "evidence": {
+            "line": "tests\\fixtures\\eicar\\eicar.com: Eicar-Signature FOUND"
+          }
+        }
+      ],
+      "issues": [],
+      "raw_summary": {
+        "returncode": 1,
+        "stdout": "tests\\fixtures\\eicar\\eicar.com: Eicar-Signature FOUND"
+      }
+    },
+    "yara": {
+      "state": "ok",
+      "detections": [
+        {
+          "source": "yara",
+          "rule_id": "scanbox_test_eicar_marker",
+          "title": "ScanBox EICAR test marker",
+          "severity": "high",
+          "confidence": "high",
+          "category": "malicious",
+          "description": "Matches the EICAR antivirus test string.",
+          "evidence": {
+            "namespace": "00_scanbox_test_rules",
+            "tags": [
+              "malicious"
+            ],
+            "meta": {
+              "title": "ScanBox EICAR test marker",
+              "description": "Matches the EICAR antivirus test string.",
+              "severity": "high",
+              "confidence": "high",
+              "category": "malicious",
+              "malicious": true
+            }
+          }
+        }
+      ],
+      "issues": [],
+      "raw_summary": {
+        "match_count": 1,
+        "match_rules": [
+          "scanbox_test_eicar_marker"
+        ]
+      }
+    },
+    "capa": {
+      "state": "skipped_not_applicable",
+      "detections": [],
+      "issues": [],
+      "raw_summary": {
+        "skip_reason": "not_applicable_for_target"
+      }
+    }
+  },
+  "quarantine": {
+    "requested_mode": "ask",
+    "performed": false,
+    "reason": "user_confirmation_required"
+  },
+  "issues": [],
+  "summary": {
+    "engine_count": 3,
+    "detections": 2,
+    "known_malicious_hits": 2,
+    "suspicious_hits": 0,
+    "status": "known_malicious"
+  }
+}

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scanbox"
+version = "0.1.0"
+description = "Windows local file security scanning orchestrator for ClamAV, YARA, and capa."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "ScanBox Contributors" },
+]
+license = { text = "MIT" }
+dependencies = [
+  "pydantic==2.12.5",
+  "yara-python==4.5.2",
+]
+
+[project.scripts]
+scanbox = "scanbox.cli.main:entrypoint"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

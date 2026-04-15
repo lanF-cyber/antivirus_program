@@ -1,0 +1,58 @@
+{
+  "kind": "scanbox-v1-golden-output",
+  "detail": "stdout_default_sanitized_subset",
+  "sample": "tests/fixtures/benign/hello.txt",
+  "overall_status": "clean_by_known_checks",
+  "target": {
+    "original_path": "tests/fixtures/benign/hello.txt",
+    "detected_type": "generic_file",
+    "extension": ".txt",
+    "mime_guess": "application/octet-stream"
+  },
+  "hashes": {
+    "sha256": "7695f47134674874eb282c60b628a0cbf08e735fb3d9ba1a908c0e0be72ba6d5",
+    "md5": "9c915fde622438f2605b3474f034135a",
+    "sha1": "7a1095da9ac659bbb0c4bda0f24be63020459827"
+  },
+  "engines": {
+    "clamav": {
+      "state": "ok",
+      "detections": [],
+      "issues": [],
+      "raw_summary": {
+        "returncode": 0,
+        "stdout": "tests\\fixtures\\benign\\hello.txt: OK"
+      }
+    },
+    "yara": {
+      "state": "ok",
+      "detections": [],
+      "issues": [],
+      "raw_summary": {
+        "match_count": 0,
+        "match_rules": []
+      }
+    },
+    "capa": {
+      "state": "skipped_not_applicable",
+      "detections": [],
+      "issues": [],
+      "raw_summary": {
+        "skip_reason": "not_applicable_for_target"
+      }
+    }
+  },
+  "quarantine": {
+    "requested_mode": "ask",
+    "performed": false,
+    "reason": "verdict_not_eligible_for_quarantine"
+  },
+  "issues": [],
+  "summary": {
+    "engine_count": 3,
+    "detections": 0,
+    "known_malicious_hits": 0,
+    "suspicious_hits": 0,
+    "status": "clean_by_known_checks"
+  }
+}

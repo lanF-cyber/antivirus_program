@@ -1,0 +1,29 @@
+[app]
+default_profile = "balanced"
+report_output_dir = "reports"
+verbose = false
+
+[timeouts]
+hash_seconds = 10
+clamav_seconds = 60
+yara_seconds = 30
+capa_seconds = 90
+
+[engines.clamav]
+enabled = true
+executable = "C:\\Tools\\ClamAV\\clamscan.exe"
+database_dir = ".local-tools\\clamav\\db"
+
+[engines.yara]
+enabled = true
+rules_dir = "rules\\yara\\bundled"
+manifest = "rules\\yara\\manifest.json"
+
+[engines.capa]
+enabled = true
+executable = "C:\\Tools\\capa\\capa.exe"
+rules_dir = "rules\\capa\\bundled"
+manifest = "rules\\capa\\manifest.json"
+
+[quarantine]
+directory = "quarantine"

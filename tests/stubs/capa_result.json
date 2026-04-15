@@ -1,0 +1,13 @@
+{
+  "meta": {
+    "version": "stub"
+  },
+  "rules": {
+    "create thread in remote process": {
+      "matches": 1
+    },
+    "read file": {
+      "matches": 2
+    }
+  }
+}

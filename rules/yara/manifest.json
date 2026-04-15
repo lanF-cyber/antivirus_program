@@ -1,0 +1,8 @@
+{
+  "name": "scanbox-starter-yara",
+  "version": "2026.04.14",
+  "source": "project-bundled",
+  "pinned_ref": "scanbox-v1-starter",
+  "build_time": "2026-04-14T00:00:00Z",
+  "enabled_rule_count": 1
+}

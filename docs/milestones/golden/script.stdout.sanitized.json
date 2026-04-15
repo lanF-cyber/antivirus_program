@@ -1,0 +1,59 @@
+{
+  "kind": "scanbox-v1-golden-output",
+  "detail": "stdout_default_sanitized_subset",
+  "sample": "tests/fixtures/benign/script.ps1",
+  "overall_status": "clean_by_known_checks",
+  "target": {
+    "original_path": "tests/fixtures/benign/script.ps1",
+    "detected_type": "powershell_script",
+    "extension": ".ps1",
+    "mime_guess": "text/plain"
+  },
+  "hashes": {
+    "sha256": "7d1c1884b0c4c424288e51342f634c3deb43a24669ba9edc7aa960aba690ee52",
+    "md5": "c02fcc85d1c4b6357c23d6206d8c971f",
+    "sha1": "6c1e7ec3994895d183c6f558c604ab27162ddcf5"
+  },
+  "engines": {
+    "clamav": {
+      "state": "ok",
+      "detections": [],
+      "issues": [],
+      "raw_summary": {
+        "returncode": 0,
+        "stdout": "tests\\fixtures\\benign\\script.ps1: OK"
+      }
+    },
+    "yara": {
+      "state": "ok",
+      "detections": [],
+      "issues": [],
+      "raw_summary": {
+        "match_count": 0,
+        "match_rules": []
+      }
+    },
+    "capa": {
+      "state": "skipped_not_applicable",
+      "detections": [],
+      "issues": [],
+      "raw_summary": {
+        "skip_reason": "script_file_not_supported_in_v1_policy",
+        "capa_skipped": true
+      }
+    }
+  },
+  "quarantine": {
+    "requested_mode": "ask",
+    "performed": false,
+    "reason": "verdict_not_eligible_for_quarantine"
+  },
+  "issues": [],
+  "summary": {
+    "engine_count": 3,
+    "detections": 0,
+    "known_malicious_hits": 0,
+    "suspicious_hits": 0,
+    "status": "clean_by_known_checks"
+  }
+}

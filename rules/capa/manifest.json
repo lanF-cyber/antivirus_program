@@ -1,0 +1,10 @@
+{
+  "name": "official-capa-rules",
+  "version": "v9.3.0",
+  "source": "https://github.com/mandiant/capa-rules",
+  "pinned_ref": "v9.3.0",
+  "vendor_status": "vendored",
+  "vendored_at": "2026-04-15T01:11:12Z",
+  "rule_count": 1016,
+  "notes": null
+}

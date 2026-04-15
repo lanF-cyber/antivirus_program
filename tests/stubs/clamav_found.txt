@@ -1,0 +1,1 @@
+C:\sample.exe: Eicar-Test-Signature FOUND
