@@ -15,6 +15,7 @@ from scanbox.core.filetypes import detect_file_type
 from scanbox.core.hashing import HashingService
 from scanbox.core.models import (
     DISCLAIMER_TEXT,
+    DirectoryScanAccounting,
     DirectoryScanEntry,
     DirectoryScanReport,
     DirectoryScanSummary,
@@ -26,6 +27,7 @@ from scanbox.core.models import (
     build_directory_report_shell,
     build_report_shell,
 )
+from scanbox.pipeline.directory_scan_policy import DirectoryScanPolicy
 from scanbox.core.timeouts import TimeoutPolicy
 from scanbox.pipeline.preflight import apply_preflight
 from scanbox.pipeline.verdicts import VerdictResolver
@@ -35,7 +37,6 @@ from scanbox.targets.file_target import FileTarget
 
 
 class ScanOrchestrator:
-    _DIRECTORY_IGNORE_NAMES = {".git", ".venv", "__pycache__"}
     _VERDICT_PRIORITY = (
         "scan_error",
         "known_malicious",
@@ -46,9 +47,15 @@ class ScanOrchestrator:
         "clean_by_known_checks",
     )
 
-    def __init__(self, config: AppConfig, adapters: list[ScannerAdapter] | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        adapters: list[ScannerAdapter] | None = None,
+        directory_policy: DirectoryScanPolicy | None = None,
+    ) -> None:
         self.config = config
         self.adapters = adapters or [ClamAvAdapter(), YaraAdapter(), CapaAdapter()]
+        self.directory_policy = directory_policy or DirectoryScanPolicy.default()
         self.hashing = HashingService()
         self.timeouts = TimeoutPolicy(config)
         self.verdicts = VerdictResolver()
@@ -73,7 +80,7 @@ class ScanOrchestrator:
         report = build_directory_report_shell(str(target.path), self.config.app.default_profile)
         report.started_at = datetime.now(timezone.utc)
 
-        candidates, directory_issues = self._enumerate_directory_files(target.path)
+        candidates, directory_issues, ignored_directory_count = self._enumerate_directory_files(target.path)
         report.target = DirectoryTargetInfo(
             original_path=str(directory_path),
             normalized_path=str(target.path),
@@ -81,6 +88,7 @@ class ScanOrchestrator:
         )
         report.target_count = len(candidates)
         report.issues.extend(directory_issues)
+        report.accounting = DirectoryScanAccounting(ignored_directory_count=ignored_directory_count)
 
         for relative_path, absolute_path in candidates:
             child_report = self._scan_directory_entry(
@@ -97,7 +105,6 @@ class ScanOrchestrator:
 
         report.scanned_count = len(report.results)
         report.summary = self._build_directory_summary(report.results)
-        report.error_count = report.summary.scan_error + len(report.issues)
         report.overall_status = self._resolve_directory_overall_status(report.results)
         if not report.results:
             report.issues.append(
@@ -108,7 +115,7 @@ class ScanOrchestrator:
                     details={"path": str(target.path)},
                 )
             )
-            report.error_count = report.summary.scan_error + len(report.issues)
+        self._refresh_directory_accounting(report)
         report.ended_at = datetime.now(timezone.utc)
         return report
 
@@ -193,9 +200,10 @@ class ScanOrchestrator:
             dry_run_quarantine=dry_run_quarantine,
         )
 
-    def _enumerate_directory_files(self, root_path: Path) -> tuple[list[tuple[str, Path]], list[EngineIssue]]:
+    def _enumerate_directory_files(self, root_path: Path) -> tuple[list[tuple[str, Path]], list[EngineIssue], int]:
         candidates: list[tuple[str, Path]] = []
         issues: list[EngineIssue] = []
+        ignored_directory_count = 0
 
         def _on_error(error: OSError) -> None:
             issues.append(
@@ -208,7 +216,9 @@ class ScanOrchestrator:
             )
 
         for current_root, dir_names, file_names in os.walk(root_path, topdown=True, onerror=_on_error, followlinks=False):
-            dir_names[:] = [name for name in dir_names if name not in self._DIRECTORY_IGNORE_NAMES]
+            filtered_dir_names, ignored_count = self.directory_policy.filter_directory_names(dir_names)
+            dir_names[:] = filtered_dir_names
+            ignored_directory_count += ignored_count
             current_root_path = Path(current_root)
             for file_name in file_names:
                 absolute_path = (current_root_path / file_name).resolve()
@@ -216,7 +226,7 @@ class ScanOrchestrator:
                 candidates.append((relative_path, absolute_path))
 
         candidates.sort(key=lambda item: item[0])
-        return candidates, issues
+        return candidates, issues, ignored_directory_count
 
     def _build_directory_summary(self, results: list[DirectoryScanEntry]) -> DirectoryScanSummary:
         summary = DirectoryScanSummary()
@@ -237,6 +247,13 @@ class ScanOrchestrator:
                 return VerdictStatus(status)
 
         return VerdictStatus.SCAN_ERROR
+
+    def _refresh_directory_accounting(self, report: DirectoryScanReport) -> None:
+        report.accounting.top_level_issue_count = len(report.issues)
+        report.accounting.directory_access_error_count = sum(
+            1 for issue in report.issues if issue.code == "directory_access_error"
+        )
+        report.error_count = report.summary.scan_error + report.accounting.top_level_issue_count
 
     def _build_file_error_report(self, file_path: Path, code: str, message: str) -> ScanReport:
         report = build_report_shell(str(file_path), self.config.app.default_profile)

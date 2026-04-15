@@ -1,0 +1,53 @@
+from pathlib import Path
+
+from scanbox.config.models import AppConfig
+from scanbox.core.enums import VerdictStatus
+from scanbox.core.models import QuarantineMode
+from scanbox.pipeline.directory_scan_policy import DirectoryScanPolicy
+from scanbox.pipeline.orchestrator import ScanOrchestrator
+import scanbox.pipeline.orchestrator as orchestrator_module
+
+
+def test_directory_scan_policy_default_ignores_v22a_names() -> None:
+    policy = DirectoryScanPolicy.default()
+
+    kept, ignored_count = policy.filter_directory_names([".git", ".venv", "__pycache__", "nested"])
+
+    assert kept == ["nested"]
+    assert ignored_count == 3
+
+
+def test_directory_scan_policy_can_be_constructed_for_future_customization() -> None:
+    policy = DirectoryScanPolicy(ignored_directory_names=frozenset({"skip-me"}))
+
+    kept, ignored_count = policy.filter_directory_names(["skip-me", "keep-me"])
+
+    assert kept == ["keep-me"]
+    assert ignored_count == 1
+
+
+def test_scan_directory_accounting_tracks_directory_access_errors(monkeypatch, tmp_path: Path) -> None:
+    root_path = tmp_path / "directory-root"
+    root_path.mkdir()
+    config = AppConfig(root_dir=tmp_path, config_path=tmp_path / "scanbox.toml")
+    orchestrator = ScanOrchestrator(config=config, adapters=[], directory_policy=DirectoryScanPolicy.default())
+
+    def fake_walk(root, topdown=True, onerror=None, followlinks=False):
+        assert onerror is not None
+        onerror(PermissionError(13, "Access is denied", str(root_path / "blocked")))
+        yield (str(root_path), [], [])
+
+    monkeypatch.setattr(orchestrator_module.os, "walk", fake_walk)
+
+    report = orchestrator.scan_directory(
+        directory_path=root_path,
+        quarantine_mode=QuarantineMode.ASK,
+        dry_run_quarantine=False,
+    )
+
+    assert report.overall_status == VerdictStatus.SCAN_ERROR
+    assert report.accounting.ignored_directory_count == 0
+    assert report.accounting.directory_access_error_count == 1
+    assert report.accounting.top_level_issue_count == 2
+    assert report.error_count == 2
+    assert [issue.code for issue in report.issues] == ["directory_access_error", "no_files_found"]

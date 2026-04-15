@@ -289,3 +289,24 @@ reports/acceptance-v2-directory/<timestamp>/directory.full.json
 ```
 
 These are local artifacts only. V2.2-A does not add committed golden outputs for directory mode in this freeze.
+
+## V2.2-B directory enhancement note
+
+The current follow-up round keeps the directory scan CLI surface unchanged.
+
+Important boundaries:
+
+- no new `--exclude` / `--include` flags yet
+- default ignore behavior is still:
+  - `.git`
+  - `.venv`
+  - `__pycache__`
+- `summary` still tracks verdict totals only
+- `overall_status` is still derived from child result verdicts only
+- `error_count` keeps the same meaning as the V2.2-A baseline
+
+The implementation focus in this round is internal:
+
+- move directory ignore/filter rules into a dedicated internal policy layer
+- add separate directory-level accounting instead of overloading existing summary fields
+- keep `stdout` on the focused default detail and `--report-out` on full detail

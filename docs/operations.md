@@ -1040,3 +1040,24 @@ V2.2-A currently does **not** use committed golden outputs for directory mode. T
 - `tests/fixtures/directory_mvp`
 - structured assertions in tests and acceptance
 - optional manual inspection of the full report
+
+### 13.8 V2.2-B note
+
+The current V2.2-B enhancement round keeps the directory scan contract stable while making directory-level accounting easier to read.
+
+Current rules:
+
+- the default ignore behavior remains:
+  - `.git`
+  - `.venv`
+  - `__pycache__`
+- there are still no new CLI include/exclude flags in this round
+- `summary` still means verdict totals only
+- `overall_status` is still derived only from child result verdicts
+- `error_count` keeps the existing meaning used in V2.2-A
+
+Additional directory-level accounting now exists to clarify:
+
+- how many directories were ignored by the default policy
+- how many top-level directory issues were recorded
+- how many of those top-level issues were `directory_access_error`

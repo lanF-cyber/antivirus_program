@@ -41,6 +41,12 @@ def test_cli_directory_scan_returns_sorted_directory_report(capsys, tmp_path: Pa
     assert payload["scanned_count"] == 3
     assert payload["overall_status"] == "known_malicious"
     assert payload["summary"]["known_malicious"] == 1
+    assert payload["summary"]["clean_by_known_checks"] == 2
+    assert payload["accounting"] == {
+        "ignored_directory_count": 3,
+        "top_level_issue_count": 0,
+        "directory_access_error_count": 0,
+    }
     assert [entry["relative_path"] for entry in payload["results"]] == [
         "hello.txt",
         "nested/eicar.com",
@@ -84,4 +90,9 @@ def test_cli_directory_scan_empty_directory_returns_scan_error(capsys, tmp_path:
     assert payload["target_count"] == 0
     assert payload["scanned_count"] == 0
     assert payload["overall_status"] == "scan_error"
+    assert payload["accounting"] == {
+        "ignored_directory_count": 0,
+        "top_level_issue_count": 1,
+        "directory_access_error_count": 0,
+    }
     assert any(issue["code"] == "no_files_found" for issue in payload["issues"])

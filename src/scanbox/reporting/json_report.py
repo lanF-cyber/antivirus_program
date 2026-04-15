@@ -10,6 +10,7 @@ from typing import Any
 
 from scanbox.core.enums import ScanProfile, VerdictStatus
 from scanbox.core.models import (
+    DirectoryScanAccounting,
     DirectoryScanReport,
     DirectoryScanSummary,
     DirectoryTargetInfo,
@@ -136,6 +137,11 @@ def build_directory_error_report(
         ),
         issues=[EngineIssue(engine="scanbox", code=error_code, message=error_message)],
         summary=DirectoryScanSummary(),
+        accounting=DirectoryScanAccounting(
+            ignored_directory_count=0,
+            top_level_issue_count=1,
+            directory_access_error_count=0,
+        ),
         target_count=0,
         scanned_count=0,
         error_count=1,

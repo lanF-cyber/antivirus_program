@@ -145,6 +145,12 @@ class DirectoryScanSummary(BaseModel):
     engine_unavailable: int = 0
 
 
+class DirectoryScanAccounting(BaseModel):
+    ignored_directory_count: int = 0
+    top_level_issue_count: int = 0
+    directory_access_error_count: int = 0
+
+
 class DirectoryScanReport(BaseModel):
     schema_version: str = "1.0.0"
     scanbox_version: str = __version__
@@ -166,6 +172,7 @@ class DirectoryScanReport(BaseModel):
     overall_status: VerdictStatus = VerdictStatus.SCAN_ERROR
     issues: list[EngineIssue] = Field(default_factory=list)
     summary: DirectoryScanSummary = Field(default_factory=DirectoryScanSummary)
+    accounting: DirectoryScanAccounting = Field(default_factory=DirectoryScanAccounting)
     results: list[DirectoryScanEntry] = Field(default_factory=list)
 
 

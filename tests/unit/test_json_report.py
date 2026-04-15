@@ -3,6 +3,7 @@ from pathlib import Path
 
 from scanbox.core.enums import EngineState, ScanProfile, VerdictStatus
 from scanbox.core.models import (
+    DirectoryScanAccounting,
     DirectoryScanEntry,
     DirectoryScanReport,
     DirectoryScanSummary,
@@ -12,7 +13,7 @@ from scanbox.core.models import (
     ScanReport,
     TargetInfo,
 )
-from scanbox.reporting.json_report import ReportDetailLevel, emit_report, serialize_report
+from scanbox.reporting.json_report import ReportDetailLevel, build_directory_error_report, emit_report, serialize_report
 
 
 def make_report() -> ScanReport:
@@ -76,6 +77,11 @@ def make_directory_report() -> DirectoryScanReport:
         scanned_count=1,
         error_count=0,
         summary=DirectoryScanSummary(clean_by_known_checks=1),
+        accounting=DirectoryScanAccounting(
+            ignored_directory_count=3,
+            top_level_issue_count=0,
+            directory_access_error_count=0,
+        ),
         results=[
             DirectoryScanEntry(
                 relative_path="sample.exe",
@@ -152,6 +158,11 @@ def test_serialize_directory_report_default_compacts_nested_capa_raw_summary() -
             "matched_rule_count": 21,
         },
     }
+    assert payload["accounting"] == {
+        "ignored_directory_count": 3,
+        "top_level_issue_count": 0,
+        "directory_access_error_count": 0,
+    }
 
 
 def test_emit_directory_report_uses_default_for_stdout_and_full_for_report_out(capsys, tmp_path: Path) -> None:
@@ -166,3 +177,22 @@ def test_emit_directory_report_uses_default_for_stdout_and_full_for_report_out(c
     assert "meta" not in stdout_payload["results"][0]["report"]["engines"]["capa"]["raw_summary"]
     assert "meta" in file_payload["results"][0]["report"]["engines"]["capa"]["raw_summary"]
     assert stdout_payload["overall_status"] == file_payload["overall_status"]
+    assert stdout_payload["accounting"] == file_payload["accounting"]
+
+
+def test_build_directory_error_report_keeps_error_count_semantics_and_accounting() -> None:
+    report = build_directory_error_report(
+        original_path="samples",
+        error_code="input_error",
+        error_message="directory mode rejected the requested quarantine action",
+        scanbox_version="test-version",
+    )
+
+    payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+
+    assert payload["error_count"] == 1
+    assert payload["accounting"] == {
+        "ignored_directory_count": 0,
+        "top_level_issue_count": 1,
+        "directory_access_error_count": 0,
+    }
