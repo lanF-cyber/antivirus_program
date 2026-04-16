@@ -55,7 +55,7 @@ class ScanOrchestrator:
     ) -> None:
         self.config = config
         self.adapters = adapters or [ClamAvAdapter(), YaraAdapter(), CapaAdapter()]
-        self.directory_policy = directory_policy or DirectoryScanPolicy.default()
+        self.directory_policy = directory_policy or DirectoryScanPolicy.from_settings(config.directory_scan)
         self.hashing = HashingService()
         self.timeouts = TimeoutPolicy(config)
         self.verdicts = VerdictResolver()

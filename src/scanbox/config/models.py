@@ -38,6 +38,13 @@ class QuarantineSettings(BaseModel):
     directory: Path = Path("quarantine")
 
 
+class DirectoryScanSettings(BaseModel):
+    ignored_directory_names: list[str] = Field(default_factory=lambda: [".git", ".venv", "__pycache__"])
+    ignored_file_names: list[str] = Field(default_factory=list)
+    ignored_suffixes: list[str] = Field(default_factory=list)
+    ignored_patterns: list[str] = Field(default_factory=list)
+
+
 class AppConfig(BaseModel):
     root_dir: Path
     config_path: Path
@@ -45,3 +52,4 @@ class AppConfig(BaseModel):
     timeouts: TimeoutSettings = Field(default_factory=TimeoutSettings)
     engines: EngineSettings = Field(default_factory=EngineSettings)
     quarantine: QuarantineSettings = Field(default_factory=QuarantineSettings)
+    directory_scan: DirectoryScanSettings = Field(default_factory=DirectoryScanSettings)

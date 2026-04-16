@@ -5,6 +5,10 @@ import shutil
 from pathlib import Path
 
 from scanbox.cli.main import main
+from scanbox.config.models import AppConfig, DirectoryScanSettings
+from scanbox.core.enums import EngineState
+from scanbox.core.models import Detection, EngineScanResult, QuarantineMode, ScanReport
+from scanbox.pipeline.orchestrator import ScanOrchestrator
 
 
 FIXTURE_ROOT = Path("tests/fixtures/directory_mvp").resolve()
@@ -27,6 +31,53 @@ def _prepare_directory_fixture(tmp_path: Path) -> Path:
     (ignored_cache / "ignored.pyc").write_bytes(b"ignored cache file")
 
     return target
+
+
+class FakeDirectoryAdapter:
+    name = "yara"
+
+    def is_enabled(self, settings: AppConfig) -> bool:
+        return True
+
+    def discover(self, settings: AppConfig):
+        return None
+
+    def supports(self, target, report: ScanReport) -> bool:
+        return True
+
+    def scan(
+        self,
+        target,
+        report: ScanReport,
+        settings: AppConfig,
+        timeout_seconds: int,
+    ) -> EngineScanResult:
+        detections: list[Detection] = []
+        if target.path.name == "eicar.com":
+            detections.append(
+                Detection(
+                    source="fake",
+                    rule_id="fake-eicar",
+                    severity="high",
+                    confidence="high",
+                    category="malicious",
+                )
+            )
+        return EngineScanResult(
+            engine=self.name,
+            enabled=True,
+            applicable=True,
+            state=EngineState.OK,
+            detections=detections,
+        )
+
+
+def _build_directory_config(tmp_path: Path, directory_scan: DirectoryScanSettings) -> AppConfig:
+    return AppConfig(
+        root_dir=tmp_path,
+        config_path=tmp_path / "scanbox.toml",
+        directory_scan=directory_scan,
+    )
 
 
 def test_cli_directory_scan_returns_sorted_directory_report(capsys, tmp_path: Path) -> None:
@@ -96,3 +147,73 @@ def test_cli_directory_scan_empty_directory_returns_scan_error(capsys, tmp_path:
         "directory_access_error_count": 0,
     }
     assert any(issue["code"] == "no_files_found" for issue in payload["issues"])
+
+
+def test_cli_directory_scan_uses_configured_directory_ignore_names(tmp_path: Path) -> None:
+    target = _prepare_directory_fixture(tmp_path)
+    config = _build_directory_config(
+        tmp_path,
+        DirectoryScanSettings(
+            ignored_directory_names=[".git", ".venv", "__pycache__", "nested"],
+            ignored_file_names=[],
+            ignored_suffixes=[],
+            ignored_patterns=[],
+        ),
+    )
+    report = ScanOrchestrator(config, adapters=[FakeDirectoryAdapter()]).scan_directory(
+        directory_path=target,
+        quarantine_mode=QuarantineMode.ASK,
+        dry_run_quarantine=False,
+    )
+    payload = report.model_dump(mode="json")
+
+    assert payload["mode"] == "directory"
+    assert payload["target_count"] == 2
+    assert payload["scanned_count"] == 2
+    assert payload["overall_status"] == "clean_by_known_checks"
+    assert payload["summary"]["known_malicious"] == 0
+    assert payload["summary"]["clean_by_known_checks"] == 2
+    assert payload["accounting"] == {
+        "ignored_directory_count": 4,
+        "top_level_issue_count": 0,
+        "directory_access_error_count": 0,
+    }
+    assert [entry["relative_path"] for entry in payload["results"]] == [
+        "hello.txt",
+        "script.ps1",
+    ]
+
+
+def test_cli_directory_scan_file_filter_scaffold_is_no_op_by_default(tmp_path: Path) -> None:
+    target = _prepare_directory_fixture(tmp_path)
+    config = _build_directory_config(
+        tmp_path,
+        DirectoryScanSettings(
+            ignored_directory_names=[".git", ".venv", "__pycache__"],
+            ignored_file_names=["hello.txt"],
+            ignored_suffixes=[".ps1"],
+            ignored_patterns=["nested/*"],
+        ),
+    )
+    report = ScanOrchestrator(config, adapters=[FakeDirectoryAdapter()]).scan_directory(
+        directory_path=target,
+        quarantine_mode=QuarantineMode.ASK,
+        dry_run_quarantine=False,
+    )
+    payload = report.model_dump(mode="json")
+
+    assert payload["target_count"] == 3
+    assert payload["scanned_count"] == 3
+    assert payload["overall_status"] == "known_malicious"
+    assert payload["summary"]["known_malicious"] == 1
+    assert payload["summary"]["clean_by_known_checks"] == 2
+    assert payload["accounting"] == {
+        "ignored_directory_count": 3,
+        "top_level_issue_count": 0,
+        "directory_access_error_count": 0,
+    }
+    assert [entry["relative_path"] for entry in payload["results"]] == [
+        "hello.txt",
+        "nested/eicar.com",
+        "script.ps1",
+    ]

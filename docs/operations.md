@@ -1047,11 +1047,17 @@ The current V2.2-B enhancement round keeps the directory scan contract stable wh
 
 Current rules:
 
+- directory filter configuration now lives under `[directory_scan]` in `config/scanbox.toml`
 - the default ignore behavior remains:
   - `.git`
   - `.venv`
   - `__pycache__`
 - there are still no new CLI include/exclude flags in this round
+- file-level filter fields now exist in config, but they are reserved scaffold only in this round:
+  - `ignored_file_names`
+  - `ignored_suffixes`
+  - `ignored_patterns`
+- the default empty file-level fields are a strict no-op and do not change the current baseline
 - `summary` still means verdict totals only
 - `overall_status` is still derived only from child result verdicts
 - `error_count` keeps the existing meaning used in V2.2-A
@@ -1061,3 +1067,5 @@ Additional directory-level accounting now exists to clarify:
 - how many directories were ignored by the default policy
 - how many top-level directory issues were recorded
 - how many of those top-level issues were `directory_access_error`
+
+For custom richer filter verification in this phase, use `pytest` with a temporary config override instead of expanding `acceptance_v2_directory.ps1`.

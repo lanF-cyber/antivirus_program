@@ -3,16 +3,30 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from scanbox.config.models import DirectoryScanSettings
+
 
 @dataclass(frozen=True, slots=True)
 class DirectoryScanPolicy:
     ignored_directory_names: frozenset[str] = field(
         default_factory=lambda: frozenset({".git", ".venv", "__pycache__"})
     )
+    ignored_file_names: tuple[str, ...] = ()
+    ignored_suffixes: tuple[str, ...] = ()
+    ignored_patterns: tuple[str, ...] = ()
 
     @classmethod
     def default(cls) -> "DirectoryScanPolicy":
-        return cls()
+        return cls.from_settings(DirectoryScanSettings())
+
+    @classmethod
+    def from_settings(cls, settings: DirectoryScanSettings) -> "DirectoryScanPolicy":
+        return cls(
+            ignored_directory_names=frozenset(settings.ignored_directory_names),
+            ignored_file_names=tuple(settings.ignored_file_names),
+            ignored_suffixes=tuple(settings.ignored_suffixes),
+            ignored_patterns=tuple(settings.ignored_patterns),
+        )
 
     def should_ignore_directory_name(self, name: str) -> bool:
         return name in self.ignored_directory_names

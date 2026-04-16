@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scanbox.config.models import AppConfig
+from scanbox.config.models import AppConfig, DirectoryScanSettings
 from scanbox.core.enums import VerdictStatus
 from scanbox.core.models import QuarantineMode
 from scanbox.pipeline.directory_scan_policy import DirectoryScanPolicy
@@ -24,6 +24,22 @@ def test_directory_scan_policy_can_be_constructed_for_future_customization() -> 
 
     assert kept == ["keep-me"]
     assert ignored_count == 1
+
+
+def test_directory_scan_policy_can_be_built_from_directory_scan_settings() -> None:
+    settings = DirectoryScanSettings(
+        ignored_directory_names=["skip-me"],
+        ignored_file_names=["ignore.txt"],
+        ignored_suffixes=[".tmp"],
+        ignored_patterns=["nested/*"],
+    )
+
+    policy = DirectoryScanPolicy.from_settings(settings)
+
+    assert policy.ignored_directory_names == frozenset({"skip-me"})
+    assert policy.ignored_file_names == ("ignore.txt",)
+    assert policy.ignored_suffixes == (".tmp",)
+    assert policy.ignored_patterns == ("nested/*",)
 
 
 def test_scan_directory_accounting_tracks_directory_access_errors(monkeypatch, tmp_path: Path) -> None:

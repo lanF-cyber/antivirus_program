@@ -196,3 +196,18 @@ def test_build_directory_error_report_keeps_error_count_semantics_and_accounting
         "top_level_issue_count": 1,
         "directory_access_error_count": 0,
     }
+
+
+def test_directory_report_serialization_does_not_expose_filter_configuration_fields() -> None:
+    report = make_directory_report()
+
+    default_payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    full_payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
+
+    for payload in (default_payload, full_payload):
+        assert "directory_scan" not in payload
+        assert set(payload["accounting"].keys()) == {
+            "ignored_directory_count",
+            "top_level_issue_count",
+            "directory_access_error_count",
+        }

@@ -297,10 +297,16 @@ The current follow-up round keeps the directory scan CLI surface unchanged.
 Important boundaries:
 
 - no new `--exclude` / `--include` flags yet
+- directory filter configuration now lives under `[directory_scan]` in `config/scanbox.toml`
 - default ignore behavior is still:
   - `.git`
   - `.venv`
   - `__pycache__`
+- file-level filter fields now exist in config, but they are scaffold only in this round:
+  - `ignored_file_names`
+  - `ignored_suffixes`
+  - `ignored_patterns`
+- the default empty file-level fields are a strict no-op and do not change the current baseline
 - `summary` still tracks verdict totals only
 - `overall_status` is still derived from child result verdicts only
 - `error_count` keeps the same meaning as the V2.2-A baseline
@@ -308,5 +314,7 @@ Important boundaries:
 The implementation focus in this round is internal:
 
 - move directory ignore/filter rules into a dedicated internal policy layer
+- wire the directory policy through config and TOML without changing the default result set
 - add separate directory-level accounting instead of overloading existing summary fields
 - keep `stdout` on the focused default detail and `--report-out` on full detail
+- keep custom richer filter verification in `pytest`, not in `acceptance_v2_directory.ps1`

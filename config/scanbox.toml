@@ -27,3 +27,9 @@ manifest = "rules\\capa\\manifest.json"
 
 [quarantine]
 directory = "quarantine"
+
+[directory_scan]
+ignored_directory_names = [".git", ".venv", "__pycache__"]
+ignored_file_names = []
+ignored_suffixes = []
+ignored_patterns = []
