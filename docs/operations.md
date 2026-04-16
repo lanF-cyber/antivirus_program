@@ -1131,3 +1131,28 @@ Current capa reporting behavior:
   - `failure_summary` when present
 - default no longer keeps `runtime_temp_dir`
 - full reports still keep the larger capa execution context, including command, runtime temp directory, metadata, and failure debugging fields
+
+## 15. Release workflow note
+
+The repository now has a dedicated release-process entrypoint:
+
+- [release-workflow.md](release-workflow.md)
+
+Use it when the goal is release readiness and maintainer traceability rather than feature development.
+
+Current expectations:
+
+- this is a workflow baseline, not installer or package distribution work
+- freeze tags remain historical baseline anchors
+- future semver tags are reserved for formal releases
+- the release checklist separates:
+  - required before release
+  - recommended before release
+- version updates must keep these two files in sync:
+  - `pyproject.toml`
+  - `src/scanbox/__init__.py`
+- the acceptance scripts remain release gates with unchanged responsibilities
+
+The companion future release entry template lives at:
+
+- [release-notes-template.md](release-notes-template.md)

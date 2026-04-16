@@ -70,6 +70,8 @@ For the short showcase script and talking points, see [docs/demo.md](docs/demo.m
 - [CHANGELOG.md](CHANGELOG.md)
 - [Operations guide](docs/operations.md)
 - [Development guide](docs/development.md)
+- [Release workflow](docs/release-workflow.md)
+- [Release notes template](docs/release-notes-template.md)
 - [Repository metadata suggestions](docs/repo-metadata.md)
 - [Architecture notes](docs/architecture.md)
 - [Dependencies](docs/dependencies.md)

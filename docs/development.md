@@ -364,3 +364,23 @@ Current capa default output now keeps only the compact daily-view fields:
 - `failure_summary` when present
 
 The larger capa execution context such as command, runtime temp directory, metadata, and full failure debugging fields remains in the full report.
+
+## Release workflow note
+
+After feature or documentation work is ready for a repository-level release candidate, switch from ad hoc development flow to the dedicated release workflow:
+
+- [release-workflow.md](release-workflow.md)
+
+Current expectations:
+
+- this is a release-process baseline, not installer or package work
+- freeze tags remain baseline anchors
+- future semver tags are the formal release tags
+- version bumps must update both:
+  - `pyproject.toml`
+  - `src/scanbox/__init__.py`
+- the baseline acceptance scripts keep their current split and remain the release gates
+
+For a future release entry, start from:
+
+- [release-notes-template.md](release-notes-template.md)
