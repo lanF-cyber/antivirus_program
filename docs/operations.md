@@ -1093,6 +1093,15 @@ What did not change:
 - directory child reports still use the same single-file default/full compaction path
 - acceptance scripts still validate the existing baselines only
 
+Directory top-level default output is also a little easier to scan now:
+
+- `summary` and `accounting` keep the same fields and values
+- default output moves non-zero items to the front using a fixed reading order
+- zero-value items stay present and follow in the same fixed order
+- `summary` still keeps problem and hit counts ahead of `clean_by_known_checks`
+- the `accounting` order is only a reading aid, not a severity ranking
+- full output keeps the complete top-level structure without this default-only reorder
+
 Current ClamAV reporting behavior:
 
 - default `raw_summary` keeps:

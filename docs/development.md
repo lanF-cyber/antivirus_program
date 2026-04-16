@@ -335,6 +335,9 @@ Current expectations:
 - `--report-out` is still the full debugging view
 - structured issue wording is more consistent across engine and ScanBox-level issues
 - directory child reports still reuse the same single-file default/full compaction rules
+- directory top-level `summary` and `accounting` keep the same fields and values, but default output now moves non-zero entries to the front in a fixed reading order
+- zero-value `summary` and `accounting` entries still remain in default output
+- the `accounting` order is only a readability aid, not a severity ranking
 
 Current ClamAV default output keeps a stable summary instead of the full raw command output:
 

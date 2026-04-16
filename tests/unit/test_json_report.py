@@ -119,6 +119,33 @@ def make_directory_report(child_report: ScanReport | None = None) -> DirectorySc
     )
 
 
+def make_directory_report_with_mixed_counts() -> DirectoryScanReport:
+    return DirectoryScanReport(
+        profile=ScanProfile.BALANCED,
+        overall_status=VerdictStatus.SUSPICIOUS,
+        target=DirectoryTargetInfo(
+            original_path="samples",
+            normalized_path=str(Path("samples").resolve()),
+            recursive=True,
+        ),
+        target_count=4,
+        scanned_count=4,
+        error_count=2,
+        summary=DirectoryScanSummary(
+            suspicious=2,
+            scan_error=1,
+            clean_by_known_checks=1,
+        ),
+        accounting=DirectoryScanAccounting(
+            ignored_directory_count=3,
+            ignored_file_count=0,
+            top_level_issue_count=2,
+            directory_access_error_count=1,
+        ),
+        results=[],
+    )
+
+
 def test_serialize_report_default_compacts_capa_raw_summary() -> None:
     report = make_report()
 
@@ -240,6 +267,72 @@ def test_serialize_directory_report_default_compacts_nested_capa_raw_summary() -
         "top_level_issue_count": 0,
         "directory_access_error_count": 0,
     }
+
+
+def test_serialize_directory_report_default_reorders_summary_with_non_zero_first() -> None:
+    report = make_directory_report_with_mixed_counts()
+
+    payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+
+    assert list(payload["summary"].keys()) == [
+        "suspicious",
+        "scan_error",
+        "clean_by_known_checks",
+        "known_malicious",
+        "partial_scan",
+        "engine_missing",
+        "engine_unavailable",
+    ]
+    assert payload["summary"] == {
+        "suspicious": 2,
+        "scan_error": 1,
+        "clean_by_known_checks": 1,
+        "known_malicious": 0,
+        "partial_scan": 0,
+        "engine_missing": 0,
+        "engine_unavailable": 0,
+    }
+
+
+def test_serialize_directory_report_default_reorders_accounting_with_non_zero_first() -> None:
+    report = make_directory_report_with_mixed_counts()
+
+    payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+
+    assert list(payload["accounting"].keys()) == [
+        "top_level_issue_count",
+        "directory_access_error_count",
+        "ignored_directory_count",
+        "ignored_file_count",
+    ]
+    assert payload["accounting"] == {
+        "top_level_issue_count": 2,
+        "directory_access_error_count": 1,
+        "ignored_directory_count": 3,
+        "ignored_file_count": 0,
+    }
+
+
+def test_serialize_directory_report_full_keeps_original_summary_and_accounting_order() -> None:
+    report = make_directory_report_with_mixed_counts()
+
+    payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
+
+    assert list(payload["summary"].keys()) == [
+        "known_malicious",
+        "suspicious",
+        "clean_by_known_checks",
+        "partial_scan",
+        "scan_error",
+        "engine_missing",
+        "engine_unavailable",
+    ]
+    assert list(payload["accounting"].keys()) == [
+        "ignored_directory_count",
+        "ignored_file_count",
+        "top_level_issue_count",
+        "directory_access_error_count",
+    ]
 
 
 def test_serialize_directory_report_default_uses_single_file_clamav_compaction() -> None:

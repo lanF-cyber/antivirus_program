@@ -28,6 +28,45 @@ class ReportDetailLevel(str, Enum):
     FULL = "full"
 
 
+_DIRECTORY_SUMMARY_DEFAULT_ORDER = (
+    "known_malicious",
+    "suspicious",
+    "scan_error",
+    "partial_scan",
+    "engine_missing",
+    "engine_unavailable",
+    "clean_by_known_checks",
+)
+
+_DIRECTORY_ACCOUNTING_DEFAULT_ORDER = (
+    "top_level_issue_count",
+    "directory_access_error_count",
+    "ignored_directory_count",
+    "ignored_file_count",
+)
+
+
+def _stable_non_zero_first(
+    payload: dict[str, Any],
+    ordered_keys: tuple[str, ...],
+) -> dict[str, Any]:
+    reordered: dict[str, Any] = {}
+    remaining_keys = [key for key in payload if key not in ordered_keys]
+
+    for key in ordered_keys:
+        if key in payload and payload[key] != 0:
+            reordered[key] = payload[key]
+
+    for key in ordered_keys:
+        if key in payload and payload[key] == 0:
+            reordered[key] = payload[key]
+
+    for key in remaining_keys:
+        reordered[key] = payload[key]
+
+    return reordered
+
+
 def _compact_capa_raw_summary(raw_summary: dict[str, Any]) -> dict[str, Any]:
     compact: dict[str, Any] = {}
     for key in ("returncode", "rule_count", "runtime_temp_dir", "skip_reason", "capa_skipped"):
@@ -70,6 +109,14 @@ def _compact_scan_report_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compact_directory_report_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    summary = payload.get("summary")
+    if isinstance(summary, dict):
+        payload["summary"] = _stable_non_zero_first(summary, _DIRECTORY_SUMMARY_DEFAULT_ORDER)
+
+    accounting = payload.get("accounting")
+    if isinstance(accounting, dict):
+        payload["accounting"] = _stable_non_zero_first(accounting, _DIRECTORY_ACCOUNTING_DEFAULT_ORDER)
+
     results = payload.get("results")
     if not isinstance(results, list):
         return payload
