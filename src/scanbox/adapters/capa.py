@@ -175,7 +175,17 @@ class CapaAdapter:
                 started_at=started_at,
                 ended_at=datetime.now(timezone.utc),
                 issues=[EngineIssue(engine=self.name, code="timeout", message=issue_text.timed_out(self.name))],
-                raw_summary={"command": command, "runtime_temp_dir": str(runtime_tmp)},
+                raw_summary={
+                    "command": command,
+                    "returncode": None,
+                    "runtime_temp_dir": str(runtime_tmp),
+                    "result_summary": issue_text.timeout_result_summary(),
+                    **(
+                        {"failure_summary": failure_summary}
+                        if (failure_summary := issue_text.failure_summary(str(exc)))
+                        else {}
+                    ),
+                },
             )
         except EngineExecutionError as exc:
             return EngineScanResult(
@@ -186,7 +196,17 @@ class CapaAdapter:
                 started_at=started_at,
                 ended_at=datetime.now(timezone.utc),
                 issues=[EngineIssue(engine=self.name, code="execution_failed", message=issue_text.execution_failed(self.name))],
-                raw_summary={"command": command, "runtime_temp_dir": str(runtime_tmp)},
+                raw_summary={
+                    "command": command,
+                    "returncode": None,
+                    "runtime_temp_dir": str(runtime_tmp),
+                    "result_summary": issue_text.execution_failed_result_summary(),
+                    **(
+                        {"failure_summary": failure_summary}
+                        if (failure_summary := issue_text.failure_summary(str(exc)))
+                        else {}
+                    ),
+                },
             )
 
         if result.returncode != 0:
@@ -210,6 +230,12 @@ class CapaAdapter:
                     "command": command,
                     "returncode": result.returncode,
                     "runtime_temp_dir": str(runtime_tmp),
+                    "result_summary": issue_text.runtime_error_result_summary(),
+                    **(
+                        {"failure_summary": failure_summary}
+                        if (failure_summary := issue_text.failure_summary(result.stderr, result.stdout))
+                        else {}
+                    ),
                 },
             )
 
@@ -225,10 +251,23 @@ class CapaAdapter:
                 ended_at=datetime.now(timezone.utc),
                 duration_ms=result.duration_ms,
                 issues=[EngineIssue(engine=self.name, code="invalid_json", message=issue_text.invalid_json(self.name))],
-                raw_summary={"stdout": result.stdout.strip(), "stderr": result.stderr.strip()},
+                raw_summary={
+                    "command": command,
+                    "returncode": result.returncode,
+                    "runtime_temp_dir": str(runtime_tmp),
+                    "result_summary": issue_text.invalid_json_result_summary(),
+                    "stdout": result.stdout.strip(),
+                    "stderr": result.stderr.strip(),
+                    **(
+                        {"failure_summary": failure_summary}
+                        if (failure_summary := issue_text.failure_summary(result.stderr, result.stdout))
+                        else {}
+                    ),
+                },
             )
 
         detections = self._extract_detections(payload)
+        rule_count = len(payload.get("rules", {})) if isinstance(payload.get("rules"), dict) else None
         return EngineScanResult(
             engine=self.name,
             enabled=True,
@@ -242,8 +281,9 @@ class CapaAdapter:
                 "command": command,
                 "returncode": result.returncode,
                 "runtime_temp_dir": str(runtime_tmp),
+                "result_summary": issue_text.capa_result_summary(rule_count),
                 "analysis_summary": self._build_analysis_summary(payload),
                 "meta": payload.get("meta"),
-                "rule_count": len(payload.get("rules", {})) if isinstance(payload.get("rules"), dict) else None,
+                "rule_count": rule_count,
             },
         )

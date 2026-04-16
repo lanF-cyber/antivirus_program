@@ -1110,3 +1110,24 @@ Current ClamAV reporting behavior:
   - `result_summary`
   - `failure_summary` when present
 - full reports still keep the larger ClamAV execution context, including command/stdout/stderr
+
+Current YARA reporting behavior:
+
+- default `raw_summary` keeps:
+  - `match_count`
+  - `result_summary`
+- default no longer repeats `match_rules`; rule-level hit detail still remains visible through `detections`
+- full reports still keep the larger YARA execution context, including `match_rules`
+
+Current capa reporting behavior:
+
+- default `raw_summary` keeps:
+  - `returncode`
+  - `rule_count`
+  - `result_summary`
+  - `analysis_summary`
+  - `skip_reason`
+  - `capa_skipped`
+  - `failure_summary` when present
+- default no longer keeps `runtime_temp_dir`
+- full reports still keep the larger capa execution context, including command, runtime temp directory, metadata, and failure debugging fields

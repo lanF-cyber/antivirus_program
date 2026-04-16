@@ -69,7 +69,7 @@ def _stable_non_zero_first(
 
 def _compact_capa_raw_summary(raw_summary: dict[str, Any]) -> dict[str, Any]:
     compact: dict[str, Any] = {}
-    for key in ("returncode", "rule_count", "runtime_temp_dir", "skip_reason", "capa_skipped"):
+    for key in ("returncode", "rule_count", "result_summary", "skip_reason", "capa_skipped", "failure_summary"):
         if key in raw_summary:
             compact[key] = raw_summary[key]
 
@@ -83,6 +83,14 @@ def _compact_capa_raw_summary(raw_summary: dict[str, Any]) -> dict[str, Any]:
 def _compact_clamav_raw_summary(raw_summary: dict[str, Any]) -> dict[str, Any]:
     compact: dict[str, Any] = {}
     for key in ("returncode", "match_count", "result_summary", "failure_summary"):
+        if key in raw_summary:
+            compact[key] = raw_summary[key]
+    return compact
+
+
+def _compact_yara_raw_summary(raw_summary: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {}
+    for key in ("match_count", "result_summary", "failure_summary"):
         if key in raw_summary:
             compact[key] = raw_summary[key]
     return compact
@@ -104,6 +112,12 @@ def _compact_scan_report_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raw_summary = clamav.get("raw_summary")
         if isinstance(raw_summary, dict):
             clamav["raw_summary"] = _compact_clamav_raw_summary(raw_summary)
+
+    yara = engines.get("yara")
+    if isinstance(yara, dict):
+        raw_summary = yara.get("raw_summary")
+        if isinstance(raw_summary, dict):
+            yara["raw_summary"] = _compact_yara_raw_summary(raw_summary)
 
     return payload
 

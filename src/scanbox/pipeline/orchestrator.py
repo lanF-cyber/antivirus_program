@@ -156,6 +156,7 @@ class ScanOrchestrator:
                     if adapter.name == "capa" and file_type.is_script:
                         current.raw_summary["capa_skipped"] = True
                         current.raw_summary["skip_reason"] = "script_file_not_supported_in_v1_policy"
+                        current.raw_summary["result_summary"] = issue_text.scan_skipped_result_summary()
                     report.engines[adapter.name] = current
                     continue
 

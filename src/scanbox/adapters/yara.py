@@ -117,6 +117,11 @@ class YaraAdapter:
             state = EngineState.TIMEOUT if "timeout" in exc.__class__.__name__.lower() or "timeout" in str(exc).lower() else EngineState.UNAVAILABLE
             code = "timeout" if state == EngineState.TIMEOUT else "yara_scan_failed"
             message = issue_text.timed_out(self.name) if state == EngineState.TIMEOUT else issue_text.scan_failed(self.name, clue=str(exc))
+            result_summary = (
+                issue_text.timeout_result_summary()
+                if state == EngineState.TIMEOUT
+                else issue_text.runtime_error_result_summary()
+            )
             return EngineScanResult(
                 engine=self.name,
                 enabled=True,
@@ -125,6 +130,15 @@ class YaraAdapter:
                 started_at=started_at,
                 ended_at=datetime.now(timezone.utc),
                 issues=[EngineIssue(engine=self.name, code=code, message=message)],
+                raw_summary={
+                    "match_count": 0,
+                    "result_summary": result_summary,
+                    **(
+                        {"failure_summary": failure_summary}
+                        if (failure_summary := issue_text.failure_summary(str(exc)))
+                        else {}
+                    ),
+                },
             )
 
         detections = [self._detection_from_match(match) for match in matches]
@@ -139,5 +153,6 @@ class YaraAdapter:
             raw_summary={
                 "match_count": len(detections),
                 "match_rules": [d.rule_id for d in detections],
+                "result_summary": issue_text.yara_result_summary(len(detections)),
             },
         )

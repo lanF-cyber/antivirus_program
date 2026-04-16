@@ -101,6 +101,46 @@ def invalid_json(engine: str, *, clue: str | None = None) -> str:
     return _append_clue(f"{engine_label(engine)} returned invalid JSON.", clue)
 
 
+def timeout_result_summary() -> str:
+    return "timed out"
+
+
+def execution_failed_result_summary() -> str:
+    return "execution failed"
+
+
+def runtime_error_result_summary() -> str:
+    return "runtime error"
+
+
+def invalid_json_result_summary() -> str:
+    return "invalid JSON output"
+
+
+def scan_skipped_result_summary() -> str:
+    return "scan skipped"
+
+
+def yara_result_summary(match_count: int) -> str:
+    if match_count > 0:
+        return f"{match_count} rule match(es)"
+    return "no rules matched"
+
+
+def capa_result_summary(rule_count: int | None) -> str:
+    if (rule_count or 0) > 0:
+        return f"{rule_count} capability rule(s) matched"
+    return "no capability rules matched"
+
+
+def failure_summary(*candidates: str | None) -> str | None:
+    for candidate in candidates:
+        summary = shorten_clue(candidate)
+        if summary:
+            return summary
+    return None
+
+
 def scanbox_issue(code: str, *, clue: str | None = None) -> str:
     if code == "config_error":
         return _append_clue("Configuration is invalid.", clue)

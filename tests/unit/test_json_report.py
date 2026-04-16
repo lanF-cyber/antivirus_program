@@ -3,6 +3,7 @@ from pathlib import Path
 
 from scanbox.core.enums import EngineState, ScanProfile, VerdictStatus
 from scanbox.core.models import (
+    Detection,
     DirectoryScanAccounting,
     DirectoryScanEntry,
     DirectoryScanReport,
@@ -41,6 +42,7 @@ def make_report() -> ScanReport:
                 "returncode": 0,
                 "runtime_temp_dir": "C:\\temp\\scanbox-capa",
                 "rule_count": 21,
+                "result_summary": "21 capability rule(s) matched",
                 "analysis_summary": {
                     "capa_version": "9.3.1",
                     "flavor": "static",
@@ -57,6 +59,44 @@ def make_report() -> ScanReport:
                     },
                 },
             },
+        )
+    }
+    report.summary = {"status": report.overall_status.value}
+    return report
+
+
+def make_yara_report(raw_summary: dict[str, object], detections: list[dict[str, object]] | None = None) -> ScanReport:
+    report = ScanReport(
+        profile=ScanProfile.BALANCED,
+        overall_status=VerdictStatus.SUSPICIOUS,
+        target=TargetInfo(
+            original_path="sample.exe",
+            normalized_path=str(Path("sample.exe").resolve()),
+            size=123,
+            detected_type="pe",
+            extension=".exe",
+            mime_guess="application/vnd.microsoft.portable-executable",
+        ),
+        quarantine=QuarantineAction(requested_mode="ask"),
+    )
+    report.engines = {
+        "yara": EngineScanResult(
+            engine="yara",
+            enabled=True,
+            applicable=True,
+            state=EngineState.OK,
+            detections=[
+                Detection(
+                    source="yara",
+                    rule_id=str(detection["rule_id"]),
+                    title=str(detection.get("title", detection["rule_id"])),
+                    severity=str(detection.get("severity", "medium")),
+                    confidence=str(detection.get("confidence", "medium")),
+                    category=str(detection.get("category", "suspicious")),
+                )
+                for detection in (detections or [])
+            ],
+            raw_summary=raw_summary,
         )
     }
     report.summary = {"status": report.overall_status.value}
@@ -155,7 +195,7 @@ def test_serialize_report_default_compacts_capa_raw_summary() -> None:
     assert raw_summary == {
         "returncode": 0,
         "rule_count": 21,
-        "runtime_temp_dir": "C:\\temp\\scanbox-capa",
+        "result_summary": "21 capability rule(s) matched",
         "analysis_summary": {
             "capa_version": "9.3.1",
             "flavor": "static",
@@ -166,6 +206,35 @@ def test_serialize_report_default_compacts_capa_raw_summary() -> None:
             "matched_rule_count": 21,
         },
     }
+
+
+def test_serialize_report_default_compacts_yara_raw_summary_and_keeps_detections() -> None:
+    report = make_yara_report(
+        {
+            "match_count": 1,
+            "match_rules": ["yara-eicar"],
+            "result_summary": "1 rule match(es)",
+        },
+        detections=[
+            {
+                "rule_id": "yara-eicar",
+                "title": "yara-eicar",
+                "severity": "high",
+                "confidence": "high",
+                "category": "malicious",
+            }
+        ],
+    )
+
+    default_payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    full_payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
+
+    assert default_payload["engines"]["yara"]["raw_summary"] == {
+        "match_count": 1,
+        "result_summary": "1 rule match(es)",
+    }
+    assert default_payload["engines"]["yara"]["detections"][0]["rule_id"] == "yara-eicar"
+    assert full_payload["engines"]["yara"]["raw_summary"]["match_rules"] == ["yara-eicar"]
 
 
 def test_serialize_report_full_keeps_capa_meta() -> None:
@@ -250,7 +319,7 @@ def test_serialize_directory_report_default_compacts_nested_capa_raw_summary() -
     assert raw_summary == {
         "returncode": 0,
         "rule_count": 21,
-        "runtime_temp_dir": "C:\\temp\\scanbox-capa",
+        "result_summary": "21 capability rule(s) matched",
         "analysis_summary": {
             "capa_version": "9.3.1",
             "flavor": "static",
@@ -359,6 +428,62 @@ def test_serialize_directory_report_default_uses_single_file_clamav_compaction()
         "result_summary": "execution failed",
         "failure_summary": "Failed to execute command: clamscan.exe",
     }
+
+
+def test_serialize_report_default_compacts_capa_failure_summary_without_runtime_temp_dir() -> None:
+    report = make_report()
+    report.engines["capa"] = EngineScanResult(
+        engine="capa",
+        enabled=True,
+        applicable=True,
+        state=EngineState.UNAVAILABLE,
+        raw_summary={
+            "command": ["capa.exe", "--json", "sample.exe"],
+            "returncode": 10,
+            "runtime_temp_dir": "C:\\temp\\scanbox-capa",
+            "result_summary": "runtime error",
+            "failure_summary": "fatal capa error",
+            "stdout": "fatal capa error\nwith more text",
+            "stderr": "fatal capa error\nwith stack",
+        },
+    )
+
+    default_payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    full_payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
+
+    assert default_payload["engines"]["capa"]["raw_summary"] == {
+        "returncode": 10,
+        "result_summary": "runtime error",
+        "failure_summary": "fatal capa error",
+    }
+    assert full_payload["engines"]["capa"]["raw_summary"]["runtime_temp_dir"] == "C:\\temp\\scanbox-capa"
+    assert full_payload["engines"]["capa"]["raw_summary"]["stderr"] == "fatal capa error\nwith stack"
+
+
+def test_serialize_report_default_keeps_capa_skip_summary_without_runtime_temp_dir() -> None:
+    report = make_report()
+    report.engines["capa"] = EngineScanResult(
+        engine="capa",
+        enabled=True,
+        applicable=False,
+        state=EngineState.SKIPPED_NOT_APPLICABLE,
+        raw_summary={
+            "capa_skipped": True,
+            "skip_reason": "script_file_not_supported_in_v1_policy",
+            "result_summary": "scan skipped",
+            "runtime_temp_dir": "C:\\temp\\scanbox-capa",
+        },
+    )
+
+    default_payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    full_payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
+
+    assert default_payload["engines"]["capa"]["raw_summary"] == {
+        "result_summary": "scan skipped",
+        "skip_reason": "script_file_not_supported_in_v1_policy",
+        "capa_skipped": True,
+    }
+    assert full_payload["engines"]["capa"]["raw_summary"]["runtime_temp_dir"] == "C:\\temp\\scanbox-capa"
 
 
 def test_emit_directory_report_uses_default_for_stdout_and_full_for_report_out(capsys, tmp_path: Path) -> None:

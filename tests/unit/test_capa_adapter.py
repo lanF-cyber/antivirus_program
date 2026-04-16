@@ -3,6 +3,10 @@ from pathlib import Path
 
 from scanbox.adapters.capa import CapaAdapter
 from scanbox.config.models import AppConfig, AppSettings, EngineBinarySettings, EngineSettings, QuarantineSettings, TimeoutSettings
+from scanbox.core.enums import ScanProfile
+from scanbox.core.models import build_report_shell
+from scanbox.core.subprocess_runner import CommandResult
+from scanbox.targets.file_target import FileTarget
 
 
 def test_capa_extracts_suspicious_keyword_rules() -> None:
@@ -62,6 +66,20 @@ def make_config(tmp_path: Path, executable: Path | None, rules_dir: Path | None,
         ),
         quarantine=QuarantineSettings(directory=tmp_path / "quarantine"),
     )
+
+
+class _FakeRunner:
+    def __init__(self, result: CommandResult) -> None:
+        self._result = result
+
+    def run(self, command, timeout_seconds, cwd=None, env=None):
+        return self._result
+
+
+def _make_target_file(tmp_path: Path) -> FileTarget:
+    sample = tmp_path / "sample.exe"
+    sample.write_bytes(b"MZ")
+    return FileTarget.from_path(sample)
 
 
 def test_capa_discover_reports_placeholder_rules(tmp_path: Path) -> None:
@@ -132,3 +150,74 @@ def test_capa_runtime_environment_uses_repo_local_temp(tmp_path: Path) -> None:
     assert runtime_tmp.is_dir()
     assert environment["TMP"] == str(runtime_tmp)
     assert environment["TEMP"] == str(runtime_tmp)
+
+
+def test_capa_scan_builds_fixed_result_summary_without_expanding_analysis_summary(tmp_path: Path) -> None:
+    executable = tmp_path / "capa.exe"
+    executable.write_text("stub", encoding="utf-8")
+    rules_dir = tmp_path / "rules"
+    rules_dir.mkdir()
+    target = _make_target_file(tmp_path)
+    payload = {
+        "meta": {
+            "version": "9.3.1",
+            "flavor": "static",
+            "analysis": {
+                "format": "pe",
+                "arch": "amd64",
+                "os": "windows",
+                "extractor": "VivisectFeatureExtractor",
+                "layout": {"ignored": True},
+            },
+        },
+        "rules": {
+            "rule-a": {"matches": 1},
+            "rule-b": {"matches": 2},
+        },
+    }
+    runner = _FakeRunner(
+        CommandResult(
+            command=["capa.exe", "--json", str(target.path)],
+            returncode=0,
+            stdout=json.dumps(payload),
+            stderr="",
+            duration_ms=12,
+        )
+    )
+    report = build_report_shell(str(target.path), ScanProfile.BALANCED)
+
+    result = CapaAdapter(runner=runner).scan(target, report, make_config(tmp_path, executable, rules_dir, None), 30)
+
+    assert result.raw_summary["result_summary"] == "2 capability rule(s) matched"
+    assert result.raw_summary["analysis_summary"] == {
+        "matched_rule_count": 2,
+        "capa_version": "9.3.1",
+        "flavor": "static",
+        "format": "pe",
+        "arch": "amd64",
+        "os": "windows",
+        "extractor": "VivisectFeatureExtractor",
+    }
+
+
+def test_capa_scan_builds_short_failure_summary_for_runtime_errors(tmp_path: Path) -> None:
+    executable = tmp_path / "capa.exe"
+    executable.write_text("stub", encoding="utf-8")
+    rules_dir = tmp_path / "rules"
+    rules_dir.mkdir()
+    target = _make_target_file(tmp_path)
+    runner = _FakeRunner(
+        CommandResult(
+            command=["capa.exe", "--json", str(target.path)],
+            returncode=10,
+            stdout="runtime failure details\nwith extra context",
+            stderr="fatal capa error\nfull stack trace follows",
+            duration_ms=9,
+        )
+    )
+    report = build_report_shell(str(target.path), ScanProfile.BALANCED)
+
+    result = CapaAdapter(runner=runner).scan(target, report, make_config(tmp_path, executable, rules_dir, None), 30)
+
+    assert result.raw_summary["result_summary"] == "runtime error"
+    assert result.raw_summary["failure_summary"] == "fatal capa error"

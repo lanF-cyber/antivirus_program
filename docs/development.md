@@ -345,3 +345,22 @@ Current ClamAV default output keeps a stable summary instead of the full raw com
 - `match_count`
 - `result_summary`
 - `failure_summary` when present
+
+Current YARA default output is also more focused:
+
+- it keeps `match_count` and `result_summary`
+- it no longer repeats `match_rules` in default output
+- rule-level hit detail still remains visible through `detections`
+- full output still keeps the larger YARA debugging context
+
+Current capa default output now keeps only the compact daily-view fields:
+
+- `returncode`
+- `rule_count`
+- `result_summary`
+- `analysis_summary`
+- `skip_reason`
+- `capa_skipped`
+- `failure_summary` when present
+
+The larger capa execution context such as command, runtime temp directory, metadata, and full failure debugging fields remains in the full report.
