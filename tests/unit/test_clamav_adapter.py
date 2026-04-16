@@ -27,6 +27,7 @@ def test_clamav_discover_reports_missing_executable(tmp_path: Path) -> None:
 
     assert issue is not None
     assert issue.code == "executable_missing"
+    assert issue.message == "ClamAV executable was not found."
 
 
 def test_clamav_discover_reports_missing_database_dir(tmp_path: Path) -> None:
@@ -37,6 +38,7 @@ def test_clamav_discover_reports_missing_database_dir(tmp_path: Path) -> None:
 
     assert issue is not None
     assert issue.code == "database_missing"
+    assert issue.message == "ClamAV database directory was not found."
 
 
 def test_clamav_discover_reports_empty_database_dir(tmp_path: Path) -> None:

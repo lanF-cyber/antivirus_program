@@ -324,3 +324,21 @@ The implementation focus in this round is internal:
 - add separate directory-level accounting instead of overloading existing summary fields
 - keep `stdout` on the focused default detail and `--report-out` on full detail
 - keep custom richer filter verification in `pytest`, not in `acceptance_v2_directory.ps1`
+
+## V2.3 reporting polish note
+
+This follow-up round keeps the existing report schema and top-level report semantics stable.
+
+Current expectations:
+
+- default stdout is more focused for quick reading
+- `--report-out` is still the full debugging view
+- structured issue wording is more consistent across engine and ScanBox-level issues
+- directory child reports still reuse the same single-file default/full compaction rules
+
+Current ClamAV default output keeps a stable summary instead of the full raw command output:
+
+- `returncode`
+- `match_count`
+- `result_summary`
+- `failure_summary` when present

@@ -13,6 +13,7 @@ from scanbox.core.enums import EngineState, VerdictStatus
 from scanbox.core.errors import InputError, ScanBoxError
 from scanbox.core.filetypes import detect_file_type
 from scanbox.core.hashing import HashingService
+from scanbox.core import issue_text
 from scanbox.core.models import (
     DISCLAIMER_TEXT,
     DirectoryScanAccounting,
@@ -116,7 +117,7 @@ class ScanOrchestrator:
                 EngineIssue(
                     engine="scanbox",
                     code="no_files_found",
-                    message="Directory scan found no files after applying the default ignore rules.",
+                    message=issue_text.scanbox_issue("no_files_found"),
                     details={"path": str(target.path)},
                 )
             )
@@ -169,7 +170,13 @@ class ScanOrchestrator:
             report.disclaimer = DISCLAIMER_TEXT
             return report
         except ScanBoxError as exc:
-            report.issues.append(EngineIssue(engine="scanbox", code="scan_error", message=str(exc)))
+            report.issues.append(
+                EngineIssue(
+                    engine="scanbox",
+                    code="scan_error",
+                    message=issue_text.scanbox_issue("scan_error", clue=str(exc)),
+                )
+            )
             report.overall_status = self.verdicts.resolve(report)
             report.summary = self._build_summary(report)
             report.ended_at = datetime.now(timezone.utc)
@@ -219,7 +226,7 @@ class ScanOrchestrator:
                 EngineIssue(
                     engine="scanbox",
                     code="directory_access_error",
-                    message=str(error),
+                    message=issue_text.scanbox_issue("directory_access_error", clue=str(error)),
                     details={"path": error.filename or str(root_path)},
                 )
             )
@@ -277,7 +284,13 @@ class ScanOrchestrator:
             size=0,
             detected_type="unknown",
         )
-        report.issues.append(EngineIssue(engine="scanbox", code=code, message=message))
+        report.issues.append(
+            EngineIssue(
+                engine="scanbox",
+                code=code,
+                message=issue_text.scanbox_issue(code, clue=message),
+            )
+        )
         report.overall_status = self.verdicts.resolve(report)
         report.summary = self._build_summary(report)
         report.disclaimer = DISCLAIMER_TEXT

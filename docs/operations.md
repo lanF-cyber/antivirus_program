@@ -1076,3 +1076,28 @@ Additional directory-level accounting now exists to clarify:
 - how many of those top-level issues were `directory_access_error`
 
 For custom richer filter verification in this phase, use `pytest` with a temporary config override instead of expanding `acceptance_v2_directory.ps1`.
+
+## 14. V2.3 reporting polish note
+
+The current V2.3 follow-up keeps the existing report schema and top-level verdict semantics intact.
+
+What changed in this round:
+
+- default stdout is more focused
+- full reports remain the debugging view
+- structured issue wording is shorter and more consistent across engines and ScanBox-level errors
+
+What did not change:
+
+- `summary`, `overall_status`, and `error_count` keep the same meaning
+- directory child reports still use the same single-file default/full compaction path
+- acceptance scripts still validate the existing baselines only
+
+Current ClamAV reporting behavior:
+
+- default `raw_summary` keeps:
+  - `returncode`
+  - `match_count`
+  - `result_summary`
+  - `failure_summary` when present
+- full reports still keep the larger ClamAV execution context, including command/stdout/stderr

@@ -10,6 +10,7 @@ from typing import Any
 from scanbox.config.models import AppConfig
 from scanbox.core.enums import EngineState
 from scanbox.core.errors import EngineExecutionError, EngineTimeoutError
+from scanbox.core import issue_text
 from scanbox.core.models import Detection, EngineIssue, EngineScanResult, ScanReport
 from scanbox.core.rulesets import CAPA_RULE_EXTENSIONS, inspect_ruleset
 from scanbox.core.subprocess_runner import SubprocessRunner
@@ -40,12 +41,16 @@ class CapaAdapter:
         engine = settings.engines.capa
         executable = engine.executable
         if executable is None:
-            return EngineIssue(engine=self.name, code="executable_missing", message="capa executable is not configured")
+            return EngineIssue(
+                engine=self.name,
+                code="executable_missing",
+                message=issue_text.executable_not_configured(self.name),
+            )
         if not executable.exists() and shutil.which(str(executable)) is None:
             return EngineIssue(
                 engine=self.name,
                 code="executable_missing",
-                message="capa executable was not found",
+                message=issue_text.executable_not_found(self.name),
                 details={"path": str(executable)},
             )
         inspection = inspect_ruleset(
@@ -59,35 +64,35 @@ class CapaAdapter:
             return EngineIssue(
                 engine=self.name,
                 code="rules_missing",
-                message="capa rules directory was not found",
+                message=issue_text.rules_missing(self.name),
                 details=inspection.to_details(),
             )
         if not inspection.manifest_exists:
             return EngineIssue(
                 engine=self.name,
                 code="manifest_missing",
-                message="capa rules manifest was not found",
+                message=issue_text.manifest_missing(self.name),
                 details=inspection.to_details(),
             )
         if inspection.has_mismatch:
             return EngineIssue(
                 engine=self.name,
                 code="manifest_mismatch",
-                message="capa rules manifest does not match the bundled rules directory",
+                message=issue_text.manifest_mismatch(self.name),
                 details=inspection.to_details(),
             )
         if inspection.placeholder:
             return EngineIssue(
                 engine=self.name,
                 code="rules_placeholder",
-                message="capa rules are still a placeholder and have not been vendored yet",
+                message=issue_text.rules_placeholder(self.name),
                 details=inspection.to_details(),
             )
         if inspection.rule_count == 0:
             return EngineIssue(
                 engine=self.name,
                 code="rules_empty",
-                message="capa rules directory exists but does not contain any usable rule files",
+                message=issue_text.rules_empty(self.name, usable=True),
                 details=inspection.to_details(),
             )
         return None
@@ -169,7 +174,7 @@ class CapaAdapter:
                 state=EngineState.TIMEOUT,
                 started_at=started_at,
                 ended_at=datetime.now(timezone.utc),
-                issues=[EngineIssue(engine=self.name, code="timeout", message=str(exc))],
+                issues=[EngineIssue(engine=self.name, code="timeout", message=issue_text.timed_out(self.name))],
                 raw_summary={"command": command, "runtime_temp_dir": str(runtime_tmp)},
             )
         except EngineExecutionError as exc:
@@ -180,7 +185,7 @@ class CapaAdapter:
                 state=EngineState.UNAVAILABLE,
                 started_at=started_at,
                 ended_at=datetime.now(timezone.utc),
-                issues=[EngineIssue(engine=self.name, code="execution_failed", message=str(exc))],
+                issues=[EngineIssue(engine=self.name, code="execution_failed", message=issue_text.execution_failed(self.name))],
                 raw_summary={"command": command, "runtime_temp_dir": str(runtime_tmp)},
             )
 
@@ -197,7 +202,7 @@ class CapaAdapter:
                     EngineIssue(
                         engine=self.name,
                         code="capa_runtime_error",
-                        message="capa returned a non-zero exit code",
+                        message=issue_text.runtime_error(self.name),
                         details={"stdout": result.stdout.strip(), "stderr": result.stderr.strip()},
                     )
                 ],
@@ -219,7 +224,7 @@ class CapaAdapter:
                 started_at=started_at,
                 ended_at=datetime.now(timezone.utc),
                 duration_ms=result.duration_ms,
-                issues=[EngineIssue(engine=self.name, code="invalid_json", message=str(exc))],
+                issues=[EngineIssue(engine=self.name, code="invalid_json", message=issue_text.invalid_json(self.name))],
                 raw_summary={"stdout": result.stdout.strip(), "stderr": result.stderr.strip()},
             )
 

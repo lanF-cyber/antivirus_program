@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from scanbox.core.enums import ScanProfile, VerdictStatus
+from scanbox.core import issue_text
 from scanbox.core.models import (
     DirectoryScanAccounting,
     DirectoryScanReport,
@@ -40,6 +41,14 @@ def _compact_capa_raw_summary(raw_summary: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
+def _compact_clamav_raw_summary(raw_summary: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {}
+    for key in ("returncode", "match_count", "result_summary", "failure_summary"):
+        if key in raw_summary:
+            compact[key] = raw_summary[key]
+    return compact
+
+
 def _compact_scan_report_payload(payload: dict[str, Any]) -> dict[str, Any]:
     engines = payload.get("engines")
     if not isinstance(engines, dict):
@@ -50,6 +59,12 @@ def _compact_scan_report_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raw_summary = capa.get("raw_summary")
         if isinstance(raw_summary, dict):
             capa["raw_summary"] = _compact_capa_raw_summary(raw_summary)
+
+    clamav = engines.get("clamav")
+    if isinstance(clamav, dict):
+        raw_summary = clamav.get("raw_summary")
+        if isinstance(raw_summary, dict):
+            clamav["raw_summary"] = _compact_clamav_raw_summary(raw_summary)
 
     return payload
 
@@ -112,7 +127,13 @@ def build_error_report(
         ),
         hashes=FileHashes(sha256="", md5=None, sha1=None),
         quarantine=QuarantineAction(requested_mode="ask"),
-        issues=[EngineIssue(engine="scanbox", code=error_code, message=error_message)],
+        issues=[
+            EngineIssue(
+                engine="scanbox",
+                code=error_code,
+                message=issue_text.scanbox_issue(error_code, clue=error_message),
+            )
+        ],
         summary={"error": True, "error_code": error_code},
     )
 
@@ -135,7 +156,13 @@ def build_directory_error_report(
             normalized_path=original_path,
             recursive=True,
         ),
-        issues=[EngineIssue(engine="scanbox", code=error_code, message=error_message)],
+        issues=[
+            EngineIssue(
+                engine="scanbox",
+                code=error_code,
+                message=issue_text.scanbox_issue(error_code, clue=error_message),
+            )
+        ],
         summary=DirectoryScanSummary(),
         accounting=DirectoryScanAccounting(
             ignored_directory_count=0,

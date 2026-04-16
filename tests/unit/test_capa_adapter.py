@@ -80,6 +80,7 @@ def test_capa_discover_reports_placeholder_rules(tmp_path: Path) -> None:
 
     assert issue is not None
     assert issue.code == "rules_placeholder"
+    assert issue.message == "capa rules are still placeholder content."
 
 
 def test_capa_discover_reports_manifest_mismatch(tmp_path: Path) -> None:
@@ -110,6 +111,7 @@ def test_capa_discover_reports_missing_manifest(tmp_path: Path) -> None:
 
     assert issue is not None
     assert issue.code == "manifest_missing"
+    assert issue.message == "capa rules manifest was not found."
 
 
 def test_capa_runtime_environment_uses_repo_local_temp(tmp_path: Path) -> None:

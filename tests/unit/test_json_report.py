@@ -63,8 +63,35 @@ def make_report() -> ScanReport:
     return report
 
 
-def make_directory_report() -> DirectoryScanReport:
-    child_report = make_report()
+def make_clamav_report(raw_summary: dict[str, object]) -> ScanReport:
+    report = ScanReport(
+        profile=ScanProfile.BALANCED,
+        overall_status=VerdictStatus.CLEAN_BY_KNOWN_CHECKS,
+        target=TargetInfo(
+            original_path="sample.exe",
+            normalized_path=str(Path("sample.exe").resolve()),
+            size=123,
+            detected_type="pe",
+            extension=".exe",
+            mime_guess="application/vnd.microsoft.portable-executable",
+        ),
+        quarantine=QuarantineAction(requested_mode="ask"),
+    )
+    report.engines = {
+        "clamav": EngineScanResult(
+            engine="clamav",
+            enabled=True,
+            applicable=True,
+            state=EngineState.OK,
+            raw_summary=raw_summary,
+        )
+    }
+    report.summary = {"status": report.overall_status.value}
+    return report
+
+
+def make_directory_report(child_report: ScanReport | None = None) -> DirectoryScanReport:
+    child_report = child_report or make_report()
     return DirectoryScanReport(
         profile=ScanProfile.BALANCED,
         overall_status=VerdictStatus.CLEAN_BY_KNOWN_CHECKS,
@@ -125,6 +152,54 @@ def test_serialize_report_full_keeps_capa_meta() -> None:
     assert raw_summary["meta"]["analysis"]["layout"] == {"functions": [1, 2, 3]}
 
 
+def test_serialize_report_default_compacts_clamav_raw_summary() -> None:
+    report = make_clamav_report(
+        {
+            "command": ["clamscan.exe", "--stdout", "sample.exe"],
+            "returncode": 1,
+            "match_count": 2,
+            "result_summary": "2 signature hit(s)",
+            "stdout": "sample.exe: Eicar-Test-Signature FOUND",
+            "stderr": "",
+        }
+    )
+
+    payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    raw_summary = payload["engines"]["clamav"]["raw_summary"]
+
+    assert raw_summary == {
+        "returncode": 1,
+        "match_count": 2,
+        "result_summary": "2 signature hit(s)",
+    }
+
+
+def test_serialize_report_default_keeps_clamav_failure_summary() -> None:
+    report = make_clamav_report(
+        {
+            "command": ["clamscan.exe", "--stdout", "sample.exe"],
+            "returncode": 2,
+            "match_count": 0,
+            "result_summary": "runtime error",
+            "failure_summary": "LibClamAV Error: database load failed",
+            "stdout": "",
+            "stderr": "LibClamAV Error: database load failed",
+        }
+    )
+
+    default_payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    full_payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
+
+    assert default_payload["engines"]["clamav"]["raw_summary"] == {
+        "returncode": 2,
+        "match_count": 0,
+        "result_summary": "runtime error",
+        "failure_summary": "LibClamAV Error: database load failed",
+    }
+    assert full_payload["engines"]["clamav"]["raw_summary"]["command"] == ["clamscan.exe", "--stdout", "sample.exe"]
+    assert full_payload["engines"]["clamav"]["raw_summary"]["stderr"] == "LibClamAV Error: database load failed"
+
+
 def test_emit_report_uses_default_for_stdout_and_full_for_report_out(capsys, tmp_path: Path) -> None:
     report = make_report()
     output_path = tmp_path / "report.json"
@@ -164,6 +239,32 @@ def test_serialize_directory_report_default_compacts_nested_capa_raw_summary() -
         "ignored_file_count": 0,
         "top_level_issue_count": 0,
         "directory_access_error_count": 0,
+    }
+
+
+def test_serialize_directory_report_default_uses_single_file_clamav_compaction() -> None:
+    report = make_directory_report(
+        make_clamav_report(
+            {
+                "command": ["clamscan.exe", "--stdout", "sample.exe"],
+                "returncode": None,
+                "match_count": 0,
+                "result_summary": "execution failed",
+                "failure_summary": "Failed to execute command: clamscan.exe",
+                "stdout": "",
+                "stderr": "",
+            }
+        )
+    )
+
+    payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    raw_summary = payload["results"][0]["report"]["engines"]["clamav"]["raw_summary"]
+
+    assert raw_summary == {
+        "returncode": None,
+        "match_count": 0,
+        "result_summary": "execution failed",
+        "failure_summary": "Failed to execute command: clamscan.exe",
     }
 
 

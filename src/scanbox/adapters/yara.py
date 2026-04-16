@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from scanbox.config.models import AppConfig
+from scanbox.core import issue_text
 from scanbox.core.enums import EngineState
 from scanbox.core.models import Detection, EngineIssue, EngineScanResult, ScanReport
 from scanbox.core.rulesets import YARA_RULE_EXTENSIONS, inspect_ruleset
@@ -30,7 +31,11 @@ class YaraAdapter:
     def discover(self, settings: AppConfig) -> EngineIssue | None:
         engine = settings.engines.yara
         if yara_lib is None:
-            return EngineIssue(engine=self.name, code="python_module_missing", message="yara-python is not installed")
+            return EngineIssue(
+                engine=self.name,
+                code="python_module_missing",
+                message=issue_text.python_module_missing("yara-python"),
+            )
         inspection = inspect_ruleset(
             engine=self.name,
             rules_dir=engine.rules_dir,
@@ -42,28 +47,28 @@ class YaraAdapter:
             return EngineIssue(
                 engine=self.name,
                 code="rules_missing",
-                message="YARA rules directory was not found",
+                message=issue_text.rules_missing(self.name),
                 details=inspection.to_details(),
             )
         if not inspection.manifest_exists:
             return EngineIssue(
                 engine=self.name,
                 code="manifest_missing",
-                message="YARA rules manifest was not found",
+                message=issue_text.manifest_missing(self.name),
                 details=inspection.to_details(),
             )
         if inspection.has_mismatch:
             return EngineIssue(
                 engine=self.name,
                 code="manifest_mismatch",
-                message="YARA rules manifest could not be validated against the bundled rules directory",
+                message=issue_text.manifest_mismatch(self.name),
                 details=inspection.to_details(),
             )
         if inspection.rule_count == 0:
             return EngineIssue(
                 engine=self.name,
                 code="rules_empty",
-                message="No YARA rule files were found in the configured rules directory",
+                message=issue_text.rules_empty(self.name),
                 details=inspection.to_details(),
             )
         return None
@@ -111,6 +116,7 @@ class YaraAdapter:
         except Exception as exc:  # noqa: BLE001
             state = EngineState.TIMEOUT if "timeout" in exc.__class__.__name__.lower() or "timeout" in str(exc).lower() else EngineState.UNAVAILABLE
             code = "timeout" if state == EngineState.TIMEOUT else "yara_scan_failed"
+            message = issue_text.timed_out(self.name) if state == EngineState.TIMEOUT else issue_text.scan_failed(self.name, clue=str(exc))
             return EngineScanResult(
                 engine=self.name,
                 enabled=True,
@@ -118,7 +124,7 @@ class YaraAdapter:
                 state=state,
                 started_at=started_at,
                 ended_at=datetime.now(timezone.utc),
-                issues=[EngineIssue(engine=self.name, code=code, message=str(exc))],
+                issues=[EngineIssue(engine=self.name, code=code, message=message)],
             )
 
         detections = [self._detection_from_match(match) for match in matches]
