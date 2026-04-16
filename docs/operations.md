@@ -1053,10 +1053,14 @@ Current rules:
   - `.venv`
   - `__pycache__`
 - there are still no new CLI include/exclude flags in this round
-- file-level filter fields now exist in config, but they are reserved scaffold only in this round:
+- file-level filtering is now configurable and active for:
   - `ignored_file_names`
   - `ignored_suffixes`
-  - `ignored_patterns`
+- `ignored_patterns` remains a reserved scaffold field in this round
+- matching rules stay intentionally narrow:
+  - `ignored_file_names` matches exact basenames only
+  - `ignored_suffixes` matches basename suffix strings only
+  - no glob, regex, or multi-extension special logic is added in this phase
 - the default empty file-level fields are a strict no-op and do not change the current baseline
 - `summary` still means verdict totals only
 - `overall_status` is still derived only from child result verdicts
@@ -1065,6 +1069,7 @@ Current rules:
 Additional directory-level accounting now exists to clarify:
 
 - how many directories were ignored by the default policy
+- how many files were skipped by active file-level filters
 - how many top-level directory issues were recorded
 - how many of those top-level issues were `directory_access_error`
 

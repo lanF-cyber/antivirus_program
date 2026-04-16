@@ -79,6 +79,7 @@ def make_directory_report() -> DirectoryScanReport:
         summary=DirectoryScanSummary(clean_by_known_checks=1),
         accounting=DirectoryScanAccounting(
             ignored_directory_count=3,
+            ignored_file_count=0,
             top_level_issue_count=0,
             directory_access_error_count=0,
         ),
@@ -160,6 +161,7 @@ def test_serialize_directory_report_default_compacts_nested_capa_raw_summary() -
     }
     assert payload["accounting"] == {
         "ignored_directory_count": 3,
+        "ignored_file_count": 0,
         "top_level_issue_count": 0,
         "directory_access_error_count": 0,
     }
@@ -193,6 +195,7 @@ def test_build_directory_error_report_keeps_error_count_semantics_and_accounting
     assert payload["error_count"] == 1
     assert payload["accounting"] == {
         "ignored_directory_count": 0,
+        "ignored_file_count": 0,
         "top_level_issue_count": 1,
         "directory_access_error_count": 0,
     }
@@ -208,6 +211,7 @@ def test_directory_report_serialization_does_not_expose_filter_configuration_fie
         assert "directory_scan" not in payload
         assert set(payload["accounting"].keys()) == {
             "ignored_directory_count",
+            "ignored_file_count",
             "top_level_issue_count",
             "directory_access_error_count",
         }

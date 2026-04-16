@@ -80,7 +80,9 @@ class ScanOrchestrator:
         report = build_directory_report_shell(str(target.path), self.config.app.default_profile)
         report.started_at = datetime.now(timezone.utc)
 
-        candidates, directory_issues, ignored_directory_count = self._enumerate_directory_files(target.path)
+        candidates, directory_issues, ignored_directory_count, ignored_file_count = self._enumerate_directory_files(
+            target.path
+        )
         report.target = DirectoryTargetInfo(
             original_path=str(directory_path),
             normalized_path=str(target.path),
@@ -88,7 +90,10 @@ class ScanOrchestrator:
         )
         report.target_count = len(candidates)
         report.issues.extend(directory_issues)
-        report.accounting = DirectoryScanAccounting(ignored_directory_count=ignored_directory_count)
+        report.accounting = DirectoryScanAccounting(
+            ignored_directory_count=ignored_directory_count,
+            ignored_file_count=ignored_file_count,
+        )
 
         for relative_path, absolute_path in candidates:
             child_report = self._scan_directory_entry(
@@ -200,10 +205,14 @@ class ScanOrchestrator:
             dry_run_quarantine=dry_run_quarantine,
         )
 
-    def _enumerate_directory_files(self, root_path: Path) -> tuple[list[tuple[str, Path]], list[EngineIssue], int]:
+    def _enumerate_directory_files(
+        self,
+        root_path: Path,
+    ) -> tuple[list[tuple[str, Path]], list[EngineIssue], int, int]:
         candidates: list[tuple[str, Path]] = []
         issues: list[EngineIssue] = []
         ignored_directory_count = 0
+        ignored_file_count = 0
 
         def _on_error(error: OSError) -> None:
             issues.append(
@@ -223,10 +232,13 @@ class ScanOrchestrator:
             for file_name in file_names:
                 absolute_path = (current_root_path / file_name).resolve()
                 relative_path = absolute_path.relative_to(root_path).as_posix()
+                if self.directory_policy.should_ignore_file(relative_path=relative_path, file_name=file_name):
+                    ignored_file_count += 1
+                    continue
                 candidates.append((relative_path, absolute_path))
 
         candidates.sort(key=lambda item: item[0])
-        return candidates, issues, ignored_directory_count
+        return candidates, issues, ignored_directory_count, ignored_file_count
 
     def _build_directory_summary(self, results: list[DirectoryScanEntry]) -> DirectoryScanSummary:
         summary = DirectoryScanSummary()

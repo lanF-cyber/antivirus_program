@@ -302,10 +302,14 @@ Important boundaries:
   - `.git`
   - `.venv`
   - `__pycache__`
-- file-level filter fields now exist in config, but they are scaffold only in this round:
+- file-level filter settings now support active filtering for:
   - `ignored_file_names`
   - `ignored_suffixes`
-  - `ignored_patterns`
+- `ignored_patterns` remains a reserved scaffold field in this round
+- basename matching rules stay intentionally simple:
+  - `ignored_file_names` uses exact basename matching
+  - `ignored_suffixes` uses basename suffix string matching
+  - no glob, regex, or special multi-extension handling is introduced
 - the default empty file-level fields are a strict no-op and do not change the current baseline
 - `summary` still tracks verdict totals only
 - `overall_status` is still derived from child result verdicts only

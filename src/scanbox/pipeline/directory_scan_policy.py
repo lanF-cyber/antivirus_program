@@ -31,6 +31,16 @@ class DirectoryScanPolicy:
     def should_ignore_directory_name(self, name: str) -> bool:
         return name in self.ignored_directory_names
 
+    def should_ignore_file_name(self, name: str) -> bool:
+        return name in self.ignored_file_names
+
+    def should_ignore_suffix(self, name: str) -> bool:
+        return any(name.endswith(suffix) for suffix in self.ignored_suffixes)
+
+    def should_ignore_file(self, *, relative_path: str, file_name: str) -> bool:
+        del relative_path
+        return self.should_ignore_file_name(file_name) or self.should_ignore_suffix(file_name)
+
     def filter_directory_names(self, names: Iterable[str]) -> tuple[list[str], int]:
         kept: list[str] = []
         ignored_count = 0

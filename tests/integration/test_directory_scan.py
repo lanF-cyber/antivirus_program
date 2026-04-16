@@ -95,6 +95,7 @@ def test_cli_directory_scan_returns_sorted_directory_report(capsys, tmp_path: Pa
     assert payload["summary"]["clean_by_known_checks"] == 2
     assert payload["accounting"] == {
         "ignored_directory_count": 3,
+        "ignored_file_count": 0,
         "top_level_issue_count": 0,
         "directory_access_error_count": 0,
     }
@@ -143,6 +144,7 @@ def test_cli_directory_scan_empty_directory_returns_scan_error(capsys, tmp_path:
     assert payload["overall_status"] == "scan_error"
     assert payload["accounting"] == {
         "ignored_directory_count": 0,
+        "ignored_file_count": 0,
         "top_level_issue_count": 1,
         "directory_access_error_count": 0,
     }
@@ -175,6 +177,7 @@ def test_cli_directory_scan_uses_configured_directory_ignore_names(tmp_path: Pat
     assert payload["summary"]["clean_by_known_checks"] == 2
     assert payload["accounting"] == {
         "ignored_directory_count": 4,
+        "ignored_file_count": 0,
         "top_level_issue_count": 0,
         "directory_access_error_count": 0,
     }
@@ -184,14 +187,119 @@ def test_cli_directory_scan_uses_configured_directory_ignore_names(tmp_path: Pat
     ]
 
 
-def test_cli_directory_scan_file_filter_scaffold_is_no_op_by_default(tmp_path: Path) -> None:
+def test_cli_directory_scan_uses_configured_ignored_file_names(tmp_path: Path) -> None:
     target = _prepare_directory_fixture(tmp_path)
     config = _build_directory_config(
         tmp_path,
         DirectoryScanSettings(
             ignored_directory_names=[".git", ".venv", "__pycache__"],
             ignored_file_names=["hello.txt"],
+            ignored_suffixes=[],
+            ignored_patterns=[],
+        ),
+    )
+    report = ScanOrchestrator(config, adapters=[FakeDirectoryAdapter()]).scan_directory(
+        directory_path=target,
+        quarantine_mode=QuarantineMode.ASK,
+        dry_run_quarantine=False,
+    )
+    payload = report.model_dump(mode="json")
+
+    assert payload["target_count"] == 2
+    assert payload["scanned_count"] == 2
+    assert payload["overall_status"] == "known_malicious"
+    assert payload["summary"]["known_malicious"] == 1
+    assert payload["summary"]["clean_by_known_checks"] == 1
+    assert payload["accounting"] == {
+        "ignored_directory_count": 3,
+        "ignored_file_count": 1,
+        "top_level_issue_count": 0,
+        "directory_access_error_count": 0,
+    }
+    assert [entry["relative_path"] for entry in payload["results"]] == [
+        "nested/eicar.com",
+        "script.ps1",
+    ]
+
+
+def test_cli_directory_scan_uses_configured_ignored_suffixes(tmp_path: Path) -> None:
+    target = _prepare_directory_fixture(tmp_path)
+    config = _build_directory_config(
+        tmp_path,
+        DirectoryScanSettings(
+            ignored_directory_names=[".git", ".venv", "__pycache__"],
+            ignored_file_names=[],
             ignored_suffixes=[".ps1"],
+            ignored_patterns=[],
+        ),
+    )
+    report = ScanOrchestrator(config, adapters=[FakeDirectoryAdapter()]).scan_directory(
+        directory_path=target,
+        quarantine_mode=QuarantineMode.ASK,
+        dry_run_quarantine=False,
+    )
+    payload = report.model_dump(mode="json")
+
+    assert payload["target_count"] == 2
+    assert payload["scanned_count"] == 2
+    assert payload["overall_status"] == "known_malicious"
+    assert payload["summary"]["known_malicious"] == 1
+    assert payload["summary"]["clean_by_known_checks"] == 1
+    assert payload["accounting"] == {
+        "ignored_directory_count": 3,
+        "ignored_file_count": 1,
+        "top_level_issue_count": 0,
+        "directory_access_error_count": 0,
+    }
+    assert [entry["relative_path"] for entry in payload["results"]] == [
+        "hello.txt",
+        "nested/eicar.com",
+    ]
+
+
+def test_cli_directory_scan_file_filter_double_match_counts_once(tmp_path: Path) -> None:
+    target = _prepare_directory_fixture(tmp_path)
+    config = _build_directory_config(
+        tmp_path,
+        DirectoryScanSettings(
+            ignored_directory_names=[".git", ".venv", "__pycache__"],
+            ignored_file_names=["script.ps1"],
+            ignored_suffixes=[".ps1"],
+            ignored_patterns=[],
+        ),
+    )
+    report = ScanOrchestrator(config, adapters=[FakeDirectoryAdapter()]).scan_directory(
+        directory_path=target,
+        quarantine_mode=QuarantineMode.ASK,
+        dry_run_quarantine=False,
+    )
+    payload = report.model_dump(mode="json")
+
+    assert payload["target_count"] == 2
+    assert payload["scanned_count"] == 2
+    assert payload["overall_status"] == "known_malicious"
+    assert payload["summary"]["known_malicious"] == 1
+    assert payload["summary"]["clean_by_known_checks"] == 1
+    assert payload["accounting"] == {
+        "ignored_directory_count": 3,
+        "ignored_file_count": 1,
+        "top_level_issue_count": 0,
+        "directory_access_error_count": 0,
+    }
+    assert [entry["relative_path"] for entry in payload["results"]] == [
+        "hello.txt",
+        "nested/eicar.com",
+    ]
+
+
+def test_cli_directory_scan_ignored_patterns_remain_no_op(tmp_path: Path) -> None:
+    target = _prepare_directory_fixture(tmp_path)
+    config = _build_directory_config(
+        tmp_path,
+        DirectoryScanSettings(
+            ignored_directory_names=[".git", ".venv", "__pycache__"],
+            ignored_file_names=[],
+            ignored_suffixes=[],
             ignored_patterns=["nested/*"],
         ),
     )
@@ -209,6 +317,7 @@ def test_cli_directory_scan_file_filter_scaffold_is_no_op_by_default(tmp_path: P
     assert payload["summary"]["clean_by_known_checks"] == 2
     assert payload["accounting"] == {
         "ignored_directory_count": 3,
+        "ignored_file_count": 0,
         "top_level_issue_count": 0,
         "directory_access_error_count": 0,
     }

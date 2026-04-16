@@ -147,6 +147,7 @@ class DirectoryScanSummary(BaseModel):
 
 class DirectoryScanAccounting(BaseModel):
     ignored_directory_count: int = 0
+    ignored_file_count: int = 0
     top_level_issue_count: int = 0
     directory_access_error_count: int = 0
 

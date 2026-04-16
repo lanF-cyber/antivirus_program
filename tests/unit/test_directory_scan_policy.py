@@ -42,6 +42,35 @@ def test_directory_scan_policy_can_be_built_from_directory_scan_settings() -> No
     assert policy.ignored_patterns == ("nested/*",)
 
 
+def test_directory_scan_policy_matches_file_names_and_suffixes_on_basename_only() -> None:
+    settings = DirectoryScanSettings(
+        ignored_file_names=["hello.txt"],
+        ignored_suffixes=[".ps1"],
+    )
+
+    policy = DirectoryScanPolicy.from_settings(settings)
+
+    assert policy.should_ignore_file_name("hello.txt") is True
+    assert policy.should_ignore_file_name("nested/hello.txt") is False
+    assert policy.should_ignore_suffix("script.ps1") is True
+    assert policy.should_ignore_suffix("script.ps1.bak") is False
+    assert policy.should_ignore_file(relative_path="hello.txt", file_name="hello.txt") is True
+    assert policy.should_ignore_file(relative_path="nested/script.ps1", file_name="script.ps1") is True
+
+
+def test_directory_scan_policy_file_filters_count_a_double_match_once() -> None:
+    settings = DirectoryScanSettings(
+        ignored_file_names=["script.ps1"],
+        ignored_suffixes=[".ps1"],
+        ignored_patterns=["nested/*"],
+    )
+
+    policy = DirectoryScanPolicy.from_settings(settings)
+
+    assert policy.should_ignore_file(relative_path="script.ps1", file_name="script.ps1") is True
+    assert policy.should_ignore_file(relative_path="nested/eicar.com", file_name="eicar.com") is False
+
+
 def test_scan_directory_accounting_tracks_directory_access_errors(monkeypatch, tmp_path: Path) -> None:
     root_path = tmp_path / "directory-root"
     root_path.mkdir()
