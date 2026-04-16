@@ -58,11 +58,44 @@ def test_directory_scan_policy_matches_file_names_and_suffixes_on_basename_only(
     assert policy.should_ignore_file(relative_path="nested/script.ps1", file_name="script.ps1") is True
 
 
+def test_directory_scan_policy_matches_patterns_on_posix_relative_paths() -> None:
+    settings = DirectoryScanSettings(
+        ignored_patterns=["nested/*"],
+    )
+
+    policy = DirectoryScanPolicy.from_settings(settings)
+
+    assert policy.should_ignore_pattern("nested/eicar.com") is True
+    assert policy.should_ignore_pattern("nested/deeper/eicar.com") is False
+    assert policy.should_ignore_pattern("foo/nested/eicar.com") is False
+
+
+def test_directory_scan_policy_pattern_matching_uses_root_anchored_relative_paths() -> None:
+    settings = DirectoryScanSettings(
+        ignored_patterns=["*.ps1"],
+    )
+
+    policy = DirectoryScanPolicy.from_settings(settings)
+
+    assert policy.should_ignore_pattern("script.ps1") is True
+    assert policy.should_ignore_pattern("nested/script.ps1") is False
+
+
+def test_directory_scan_policy_patterns_are_not_regex_or_case_expanded() -> None:
+    settings = DirectoryScanSettings(
+        ignored_patterns=["nested/.*", "NESTED/*"],
+    )
+
+    policy = DirectoryScanPolicy.from_settings(settings)
+
+    assert policy.should_ignore_pattern("nested/eicar.com") is False
+
+
 def test_directory_scan_policy_file_filters_count_a_double_match_once() -> None:
     settings = DirectoryScanSettings(
         ignored_file_names=["script.ps1"],
         ignored_suffixes=[".ps1"],
-        ignored_patterns=["nested/*"],
+        ignored_patterns=["script.ps1"],
     )
 
     policy = DirectoryScanPolicy.from_settings(settings)

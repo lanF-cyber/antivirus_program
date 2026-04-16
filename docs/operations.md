@@ -1056,11 +1056,13 @@ Current rules:
 - file-level filtering is now configurable and active for:
   - `ignored_file_names`
   - `ignored_suffixes`
-- `ignored_patterns` remains a reserved scaffold field in this round
+- `ignored_patterns`
 - matching rules stay intentionally narrow:
   - `ignored_file_names` matches exact basenames only
   - `ignored_suffixes` matches basename suffix strings only
-  - no glob, regex, or multi-extension special logic is added in this phase
+  - `ignored_patterns` matches the normalized POSIX relative path string with glob-style semantics
+  - the semantic anchor is `nested/*`, which matches `nested/eicar.com`
+  - no regex, case expansion, Windows `\` compatibility, or multi-extension special logic is added in this phase
 - the default empty file-level fields are a strict no-op and do not change the current baseline
 - `summary` still means verdict totals only
 - `overall_status` is still derived only from child result verdicts

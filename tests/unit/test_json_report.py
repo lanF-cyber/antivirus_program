@@ -209,6 +209,8 @@ def test_directory_report_serialization_does_not_expose_filter_configuration_fie
 
     for payload in (default_payload, full_payload):
         assert "directory_scan" not in payload
+        assert "patterns_enabled" not in payload
+        assert "active_filters" not in payload
         assert set(payload["accounting"].keys()) == {
             "ignored_directory_count",
             "ignored_file_count",

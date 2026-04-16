@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 from typing import Iterable
 
 from scanbox.config.models import DirectoryScanSettings
@@ -37,9 +38,16 @@ class DirectoryScanPolicy:
     def should_ignore_suffix(self, name: str) -> bool:
         return any(name.endswith(suffix) for suffix in self.ignored_suffixes)
 
+    def should_ignore_pattern(self, relative_path: str) -> bool:
+        anchored_path = PurePosixPath("/" + relative_path)
+        return any(anchored_path.match("/" + pattern) for pattern in self.ignored_patterns)
+
     def should_ignore_file(self, *, relative_path: str, file_name: str) -> bool:
-        del relative_path
-        return self.should_ignore_file_name(file_name) or self.should_ignore_suffix(file_name)
+        return (
+            self.should_ignore_file_name(file_name)
+            or self.should_ignore_suffix(file_name)
+            or self.should_ignore_pattern(relative_path)
+        )
 
     def filter_directory_names(self, names: Iterable[str]) -> tuple[list[str], int]:
         kept: list[str] = []
