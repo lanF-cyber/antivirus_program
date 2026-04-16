@@ -384,3 +384,8 @@ Current expectations:
 For a future release entry, start from:
 
 - [release-notes-template.md](release-notes-template.md)
+
+For dry-run rehearsal and a baseline worksheet, also use:
+
+- [release-prep-dry-run.md](release-prep-dry-run.md)
+- [release-notes-dry-run-example.md](release-notes-dry-run-example.md)

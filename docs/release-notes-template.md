@@ -2,6 +2,8 @@
 
 This is a future release entry template. It does not replace [CHANGELOG.md](../CHANGELOG.md), and it does not imply that ScanBox is already on a formal semver release cadence.
 
+For a worked repository example, see [release-notes-dry-run-example.md](release-notes-dry-run-example.md).
+
 ## Release Version
 
 - `vX.Y.Z`

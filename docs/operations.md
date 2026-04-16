@@ -1156,3 +1156,8 @@ Current expectations:
 The companion future release entry template lives at:
 
 - [release-notes-template.md](release-notes-template.md)
+
+For dry-run rehearsal and traceable release-prep records, also use:
+
+- [release-prep-dry-run.md](release-prep-dry-run.md)
+- [release-notes-dry-run-example.md](release-notes-dry-run-example.md)

@@ -110,6 +110,44 @@ This workflow only establishes the future semver convention. It does not create 
 - Re-check roadmap issue status against the planned release notes follow-ups.
 - If the release changes the public presentation layer, confirm `README.md` and [demo.md](demo.md) still support a short walkthrough.
 
+## Release Prep Dry-Run
+
+Use a dry-run when the goal is to rehearse release prep without creating a real tag, a real package artifact, or a real GitHub Release.
+
+Dry-run goals:
+
+- rehearse release prep
+- re-check the baseline gates
+- produce a traceable release candidate record
+
+Dry-run boundaries:
+
+- no installer work
+- no packaging artifact
+- no real tag creation
+- no real GitHub Release publication
+
+Dry-run repo checks should always include:
+
+- candidate branch is `main`
+- candidate source is checked against `origin/main`
+- version consistency is checked in:
+  - `pyproject.toml`
+  - `src/scanbox/__init__.py`
+- the three acceptance scripts remain the baseline gates:
+  - `acceptance_v1.ps1`
+  - `acceptance_v2_quarantine.ps1`
+  - `acceptance_v2_directory.ps1`
+
+Use these companion documents:
+
+- [release-prep-dry-run.md](release-prep-dry-run.md)
+  - baseline worksheet and runbook
+- [release-notes-dry-run-example.md](release-notes-dry-run-example.md)
+  - worked dry-run example
+- [release-notes-template.md](release-notes-template.md)
+  - reusable future release entry template
+
 ## Baseline-Aware Delivery
 
 Release preparation is baseline-aware, not package-aware.
