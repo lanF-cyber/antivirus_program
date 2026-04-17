@@ -56,25 +56,9 @@ This is the best fit for the current project state because:
 
 ### Recommended shape
 
-The first artifact should be a filtered operator-facing folder tree, packaged as a zip, with contents conceptually like:
+The first artifact should be a filtered operator-facing folder tree, packaged as a zip.
 
-```text
-scanbox-vX.Y.Z/
-  README.md
-  pyproject.toml
-  src/
-  config/
-    scanbox.toml
-    clamav/
-      freshclam.conf
-  rules/
-    yara/
-    capa/
-  scripts/
-    verify_env.ps1
-  docs/
-    dependencies.md
-```
+The concrete artifact-era path structure is defined in the `Future Release Tree` section below.
 
 This keeps the first artifact:
 
@@ -82,6 +66,74 @@ This keeps the first artifact:
 - auditable
 - reproducible
 - close to the real runtime layout already used by the repository
+
+## Future Release Tree
+
+The future artifact needs two separate concepts:
+
+- **repo layout**
+  - the current development repository structure
+- **artifact layout**
+  - the operator-facing directory tree inside the future release zip
+
+These are related, but they are not the same thing.
+
+Important boundary:
+
+- the future artifact must not be treated as a raw zip of the repository root
+- the current repo `src/scanbox/` path is only the source location today
+- the artifact should expose a filtered, operator-facing tree with stable and readable paths
+- this design step does not promise that `src/scanbox/` will remain the final operator-visible runtime path inside the artifact
+
+### Proposed logical artifact root
+
+```text
+scanbox-vX.Y.Z-windows-x64/
+  README.md
+  pyproject.toml
+  runtime/
+    scanbox/
+  config/
+    scanbox.toml
+    clamav/
+      freshclam.conf
+  rules/
+    yara/
+      bundled/
+      manifest.json
+    capa/
+      bundled/
+      manifest.json
+  scripts/
+    verify_env.ps1
+  docs/
+    dependencies.md
+```
+
+### Path interpretation
+
+- `runtime/scanbox/`
+  - this is the **artifact-era logical runtime location**
+  - it is not a hard promise that the artifact must expose the repo's `src/scanbox/` path directly
+- `config/`
+  - this carries operator-visible default config templates only
+- `rules/`
+  - this carries the bundled rule subsets and manifests needed for runtime behavior
+- `scripts/verify_env.ps1`
+  - this remains the operator-facing verification entrypoint
+- `docs/dependencies.md`
+  - this is a selective operator doc include, not a signal that the full `docs/` tree belongs in the artifact
+
+### Repo layout to artifact layout mapping
+
+This future mapping should be explicit:
+
+- repo source subtree
+  - `src/scanbox/`
+- future artifact runtime subtree
+  - `runtime/scanbox/`
+
+That mapping is a packaging concern, not a reason to expose the repository source layout as the final artifact contract.
 
 ## Alternatives And Trade-Offs
 
@@ -136,61 +188,103 @@ Reason:
 - runtime temp and failure-diagnosis behavior are easier to reason about in a transparent folder tree
 - single-file packaging would force a higher bar for determinism than the project currently has
 
-## Artifact Boundary
+## Artifact Manifest Boundary
 
-### Should be included in the future release artifact
+The future single-folder artifact should use a filtered manifest model rather than a whole-repo copy model.
 
-The first operator-facing artifact should include the ScanBox-owned runtime subset:
+### Included in the first artifact
 
-- installable runtime source:
-  - `pyproject.toml`
-  - `src/`
-- default config templates:
-  - `config/scanbox.toml`
-  - `config/clamav/freshclam.conf`
-- bundled rules and manifests:
-  - `rules/yara/bundled/`
-  - `rules/yara/manifest.json`
-  - `rules/capa/bundled/`
-  - `rules/capa/manifest.json`
-- operator-facing verification helper:
-  - `scripts/verify_env.ps1`
-- operator-facing documentation:
-  - `README.md`
-  - `docs/dependencies.md`
+| Artifact-era path | Source of truth today | Inclusion status | Notes |
+| --- | --- | --- | --- |
+| `README.md` | repo root | include | operator-facing top-level entrypoint |
+| `pyproject.toml` | repo root | include | version source and runtime packaging metadata |
+| `runtime/scanbox/` | `src/scanbox/` | include | artifact-era runtime subset, not a direct repo-path contract |
+| `config/scanbox.toml` | `config/scanbox.toml` | include | default config template |
+| `config/clamav/freshclam.conf` | `config/clamav/freshclam.conf` | include | default freshclam template |
+| `rules/yara/bundled/` | `rules/yara/bundled/` | include | bundled YARA rules |
+| `rules/yara/manifest.json` | `rules/yara/manifest.json` | include | bundled YARA metadata |
+| `rules/capa/bundled/` | `rules/capa/bundled/` | include | bundled capa rules subset |
+| `rules/capa/manifest.json` | `rules/capa/manifest.json` | include | bundled capa metadata |
+| `scripts/verify_env.ps1` | `scripts/verify_env.ps1` | include | operator-facing verification helper |
+| `docs/dependencies.md` | `docs/dependencies.md` | include | operator-facing docs subset only |
 
-This is the minimum coherent subset that reflects how ScanBox actually operates today.
+Important documentation boundary:
 
-### Should remain repo-only
+- `docs/dependencies.md` entering the artifact means **selective doc inclusion**
+- it does **not** mean the entire `docs/` tree enters the artifact
+- the future artifact should carry only the operator-facing docs subset that supports setup and verification
 
-These items should not be part of the first operator-facing artifact:
+### Repo-only
 
-- `tests/`
-- acceptance scripts:
-  - `scripts/acceptance_v1.ps1`
-  - `scripts/acceptance_v2_quarantine.ps1`
-  - `scripts/acceptance_v2_directory.ps1`
-- milestone freeze documents
-- release workflow, release-prep, and release-notes template documents
-- `scripts/verify_release_readiness.ps1`
-- `reports/`
-- maintainer-only planning and metadata materials
+| Path class | Status | Reason |
+| --- | --- | --- |
+| `tests/` | repo-only | maintainer validation, not operator runtime |
+| acceptance scripts | repo-only | baseline gates remain maintainer-facing |
+| milestone freeze docs | repo-only | historical baseline anchors |
+| release workflow and dry-run docs | repo-only | maintainer release process only |
+| `scripts/verify_release_readiness.ps1` | repo-only | maintainer readiness precheck |
+| `reports/` | repo-only | local run artifacts only |
+| maintainer metadata and planning docs | repo-only | not operator-facing runtime material |
 
-### Should not be bundled in the first artifact
+### External and not bundled
 
-These remain explicit external/operator-provided items:
+| Dependency class | Status | Reason |
+| --- | --- | --- |
+| ClamAV executable | external | third-party runtime dependency |
+| ClamAV database | external | operator-provided / workstation-provided runtime data |
+| capa executable | external | third-party runtime dependency |
+| `config/scanbox.local.toml` | external/local only | workstation-specific override |
+| `config/clamav/freshclam.local.conf` | external/local only | workstation-specific override |
 
-- ClamAV executable
-- ClamAV database
-- capa executable
-- workstation-specific override config:
-  - `config/scanbox.local.toml`
-  - `config/clamav/freshclam.local.conf`
+The first single-folder distribution explicitly does **not** promise:
 
-Important boundary:
+- automatic acquisition of external dependencies
+- automatic discovery of external dependencies
+- automatic database download
+- automatic writing of workstation-local override config
+- automatic external engine bootstrap
 
-- the first artifact defines what ScanBox itself should carry
-- it does not attempt to hide or auto-install third-party engine dependencies
+Those actions remain outside the first artifact contract.
+
+## Artifact Naming And Versioning Convention
+
+### Primary recommended pattern
+
+- `scanbox-vX.Y.Z-windows-x64.zip`
+
+### Acceptable variant
+
+- `scanbox_X.Y.Z_windows_x64.zip`
+
+### Naming rules
+
+- the primary pattern should be preferred for future formal artifacts
+- the acceptable variant is only for compatibility or internal tooling situations
+- the first artifact root folder should align with the primary pattern:
+  - `scanbox-vX.Y.Z-windows-x64/`
+- freeze tag names do not enter artifact filenames
+- artifact naming uses the same semver string as the future formal release tag family, but does not imply that a real tag already exists
+
+### Version source
+
+Artifact version must come only from these two files:
+
+- `pyproject.toml`
+- `src/scanbox/__init__.py`
+
+They must match.
+
+### Platform scope
+
+The first design stage only defines:
+
+- `windows-x64`
+
+It does not pre-design additional platform suffixes such as:
+
+- `windows-arm64`
+- `linux-x64`
+- `macos-*`
 
 ## Windows-First Trade-Offs
 
@@ -218,6 +312,23 @@ This is a deliberate trade-off:
 
 The current ClamAV and capa acquisition model is part of reality and should be acknowledged by the distribution design, not hidden by it.
 
+## Windows-First Path Transparency Requirements
+
+The future single-folder artifact should satisfy these path transparency requirements:
+
+- an operator should be able to see where runtime code, config, rules, and verification helpers live
+- the artifact should not require an installer or opaque bootstrap layer to explain path relationships
+- external engine wiring must remain explicit
+- default config templates, rules, and verification helpers should remain in stable and inspectable locations
+- the first artifact should optimize for reproducibility and diagnosability before it optimizes for installer-like convenience
+
+Known current friction:
+
+- `config/scanbox.toml` currently carries `C:\Tools\...` style placeholder executable paths for ClamAV and capa
+- that is acceptable for the repository today, but it is not the final operator-facing story for a future artifact
+- this design step records that mismatch as a future packaging follow-up
+- this step does not change code or configuration to solve it
+
 ## Future Implementation Backlog
 
 ### Phase A
@@ -226,11 +337,14 @@ The current ClamAV and capa acquisition model is part of reality and should be a
 - define the operator-facing subset precisely
 - define artifact naming and versioning conventions
 - add an operator quickstart section tailored to the future artifact
+- define an artifact assembly spec / manifest generation step
 
 ### Phase B
 
 - evaluate whether to also produce a wheel as a secondary maintainer artifact
 - only do this after rules/config/runtime asset inclusion has been validated
+- define repo-layout to artifact-layout mapping rules explicitly
+- decide whether `rules/capa/bundled/` metadata files such as `.github/`, vendored `README.md`, and `LICENSE.txt` are copied, filtered, or normalized for artifact use
 
 ### Phase C
 
@@ -238,6 +352,16 @@ The current ClamAV and capa acquisition model is part of reality and should be a
   - refined runnable zip conventions
   - semi-automated external dependency bootstrap
   - single-file packaging only if runtime and path behavior become sufficiently deterministic
+- define the minimum packaging smoke-check needed before any real artifact is considered release-ready
+
+## Minimal Follow-Up List
+
+- define the artifact assembly spec / manifest generation workflow
+- define the exact include/exclude rules from repo layout to artifact layout
+- decide the final physical runtime path inside the artifact
+- decide the artifact treatment of vendored capa metadata files
+- decide whether operator quickstart guidance lives in `README.md` or a dedicated artifact-local quickstart file
+- define a future packaging smoke-check that validates artifact structure without changing acceptance responsibilities
 
 ## Recommendation Summary
 
