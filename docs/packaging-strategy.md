@@ -135,6 +135,57 @@ This future mapping should be explicit:
 
 That mapping is a packaging concern, not a reason to expose the repository source layout as the final artifact contract.
 
+## Artifact Assembly Spec
+
+The future packaging flow should treat artifact assembly as an explicit mapping step:
+
+- input:
+  - selected repo content
+- transformation:
+  - repo-layout to artifact-layout mapping
+- output:
+  - a staged artifact tree rooted at `scanbox-vX.Y.Z-windows-x64/`
+
+It must not treat the repository root as a directly shippable folder.
+
+### Assembly boundary
+
+The future artifact should be assembled as a filtered operator-facing tree.
+
+- `runtime/scanbox/`
+  - this is the **artifact-internal runtime path**
+  - it does **not** change the Python import contract
+  - it does **not** promise that repo `src/scanbox/` is the final operator-visible runtime path
+- `config/`
+  - this carries default operator-facing config templates only
+- `rules/`
+  - this carries bundled runtime rule content plus rule manifests
+- `scripts/verify_env.ps1`
+  - this remains the operator-facing verification helper
+- `docs/dependencies.md`
+  - this remains a selective operator-facing docs include
+- `pyproject.toml`
+  - this is included for version metadata visibility, release traceability, and artifact/source correlation
+  - it is not a runtime-critical file for normal operator execution
+
+### Required assembly mappings
+
+The initial explicit mapping set should be:
+
+| Repo source | Artifact destination | Why it is copied |
+| --- | --- | --- |
+| `README.md` | `README.md` | top-level operator entrypoint |
+| `pyproject.toml` | `pyproject.toml` | version metadata visibility and traceability |
+| `src/scanbox/` | `runtime/scanbox/` | artifact-internal runtime subset |
+| `config/scanbox.toml` | `config/scanbox.toml` | default config template |
+| `config/clamav/freshclam.conf` | `config/clamav/freshclam.conf` | default freshclam template |
+| `rules/yara/bundled/` | `rules/yara/bundled/` | bundled YARA runtime content |
+| `rules/yara/manifest.json` | `rules/yara/manifest.json` | YARA rule metadata |
+| `rules/capa/bundled/` | `rules/capa/bundled/` | bundled capa runtime content |
+| `rules/capa/manifest.json` | `rules/capa/manifest.json` | capa rule metadata |
+| `scripts/verify_env.ps1` | `scripts/verify_env.ps1` | operator-facing verification helper |
+| `docs/dependencies.md` | `docs/dependencies.md` | operator-facing dependency/setup reference |
+
 ## Alternatives And Trade-Offs
 
 ### Wheel only
@@ -197,7 +248,7 @@ The future single-folder artifact should use a filtered manifest model rather th
 | Artifact-era path | Source of truth today | Inclusion status | Notes |
 | --- | --- | --- | --- |
 | `README.md` | repo root | include | operator-facing top-level entrypoint |
-| `pyproject.toml` | repo root | include | version source and runtime packaging metadata |
+| `pyproject.toml` | repo root | include | version metadata visibility and release traceability |
 | `runtime/scanbox/` | `src/scanbox/` | include | artifact-era runtime subset, not a direct repo-path contract |
 | `config/scanbox.toml` | `config/scanbox.toml` | include | default config template |
 | `config/clamav/freshclam.conf` | `config/clamav/freshclam.conf` | include | default freshclam template |
@@ -224,6 +275,9 @@ Important documentation boundary:
 | release workflow and dry-run docs | repo-only | maintainer release process only |
 | `scripts/verify_release_readiness.ps1` | repo-only | maintainer readiness precheck |
 | `reports/` | repo-only | local run artifacts only |
+| `.git/` and repo management metadata | repo-only | source-control material is not part of the artifact contract |
+| `.venv/` | repo-only | local environment only |
+| `__pycache__/` and `*.pyc` | repo-only | transient Python cache content |
 | maintainer metadata and planning docs | repo-only | not operator-facing runtime material |
 
 ### External and not bundled
@@ -245,6 +299,75 @@ The first single-folder distribution explicitly does **not** promise:
 - automatic external engine bootstrap
 
 Those actions remain outside the first artifact contract.
+
+### Vendored third-party notices policy
+
+The future artifact should treat third-party notices conservatively:
+
+- vendored third-party notices and license files should be retained
+- retaining license and notice material takes priority over small size reductions
+- repo-service metadata such as `.github/` may be excluded
+- vendored `README.md` files may be treated as an implementation choice, but they do not outrank license or notice retention
+
+## Manifest Generation Design
+
+Future packaging should be driven by a maintainer-side manifest model rather than by ad hoc copy rules.
+
+### Manifest rule shape
+
+Include entries should be defined with:
+
+- `source`
+- `destination`
+- `kind`
+  - `file`
+  - `directory`
+- `required`
+- `notes`
+
+Exclude entries should be defined with:
+
+- `pattern`
+- `scope`
+- `reason`
+
+### Rule priority
+
+The future assembly implementation should use this fixed priority order:
+
+1. **Hard excludes first**
+- external-not-bundled content must never enter the artifact
+- maintainer-only content must never enter the artifact
+
+2. **Scoped excludes override broad includes**
+- excludes inside an included directory take priority over directory-level includes
+- example:
+  - `rules/capa/bundled/` may be included as a subtree
+  - `.github/` inside that subtree still remains excluded
+
+3. **Explicit include mappings are applied after excludes are resolved**
+- only explicitly mapped content is eligible for the artifact
+
+4. **Anything not explicitly included is excluded by default**
+- the assembly policy is allowlist-first, not copy-all-then-trim
+
+### Generated manifest snapshot
+
+The future packaging workflow should generate a maintainer-side manifest snapshot with at least:
+
+- artifact version
+- platform id
+- artifact root name
+- include mapping summary
+- exclude rules summary
+- generation timestamp
+- source commit or equivalent source tree identifier
+- smoke-check result summary
+
+Default design choice:
+
+- the generated manifest snapshot is a **build-side sidecar**
+- the first operator-facing artifact does not need to carry that snapshot inside the artifact root
 
 ## Artifact Naming And Versioning Convention
 
@@ -329,22 +452,100 @@ Known current friction:
 - this design step records that mismatch as a future packaging follow-up
 - this step does not change code or configuration to solve it
 
+## Packaging Smoke-Check Definition
+
+The future packaging flow should define a packaging smoke-check that validates the assembled artifact tree before any archive step is considered.
+
+This smoke-check is:
+
+- a structure and traceability check
+- not runtime verification
+- not acceptance
+- not a replacement for baseline gates
+
+### Minimum smoke-check surface
+
+The first smoke-check definition should verify:
+
+- artifact root folder name matches the naming convention
+- version metadata is traceable from:
+  - `pyproject.toml`
+  - runtime package version source
+- all required include entries are present
+- repo-only content is absent
+- external-not-bundled content is absent
+- transient content is absent:
+  - `__pycache__/`
+  - `*.pyc`
+  - `.venv/`
+- maintainer-only scripts do not enter the artifact, especially:
+  - acceptance scripts
+  - `scripts/verify_release_readiness.ps1`
+- operator-facing subset exists, including:
+  - `scripts/verify_env.ps1`
+  - `docs/dependencies.md`
+  - rule manifests
+
+## Future Packaging Script I/O Boundary
+
+The future packaging script should be defined around staged artifact assembly, not around zip creation alone.
+
+### Inputs
+
+- repo root
+- version
+- target platform
+  - `windows-x64`
+- staging or output directory
+- assembly spec
+- include and exclude rules
+
+### First-class outputs
+
+- staged artifact tree
+- generated manifest snapshot
+- smoke-check result
+
+### Secondary packaging output
+
+- zip filename
+- zip path
+
+Important boundary:
+
+- the **staged artifact tree is a first-class output**
+- a zip archive is only one possible packaging form for that staged tree
+- assembly should not be tightly coupled to zip creation
+
+### Explicit non-goals
+
+The future packaging script should not:
+
+- download ClamAV or capa
+- download the ClamAV database
+- automatically discover workstation-local external dependencies
+- automatically write workstation-local override config
+- create tags
+- create GitHub Releases
+- modify repo-tracked files
+
 ## Future Implementation Backlog
 
 ### Phase A
 
-- define the exact single-folder release tree
+- define the exact artifact assembly spec
+- define the manifest generation format
 - define the operator-facing subset precisely
-- define artifact naming and versioning conventions
+- define the repo-layout to artifact-layout mapping implementation
 - add an operator quickstart section tailored to the future artifact
-- define an artifact assembly spec / manifest generation step
 
 ### Phase B
 
 - evaluate whether to also produce a wheel as a secondary maintainer artifact
 - only do this after rules/config/runtime asset inclusion has been validated
-- define repo-layout to artifact-layout mapping rules explicitly
+- decide the final artifact-internal runtime path implementation details
 - decide whether `rules/capa/bundled/` metadata files such as `.github/`, vendored `README.md`, and `LICENSE.txt` are copied, filtered, or normalized for artifact use
+- define the packaging smoke-check automation boundary
 
 ### Phase C
 
@@ -358,10 +559,10 @@ Known current friction:
 
 - define the artifact assembly spec / manifest generation workflow
 - define the exact include/exclude rules from repo layout to artifact layout
-- decide the final physical runtime path inside the artifact
+- decide the final physical runtime path implementation inside the artifact
 - decide the artifact treatment of vendored capa metadata files
 - decide whether operator quickstart guidance lives in `README.md` or a dedicated artifact-local quickstart file
-- define a future packaging smoke-check that validates artifact structure without changing acceptance responsibilities
+- define the packaging smoke-check implementation without changing acceptance responsibilities
 
 ## Recommendation Summary
 
