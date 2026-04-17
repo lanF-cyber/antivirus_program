@@ -385,6 +385,10 @@ For a future release entry, start from:
 
 - [release-notes-template.md](release-notes-template.md)
 
+For future distribution and release-artifact design decisions, use:
+
+- [packaging-strategy.md](packaging-strategy.md)
+
 For dry-run rehearsal and a baseline worksheet, also use:
 
 - [release-prep-dry-run.md](release-prep-dry-run.md)

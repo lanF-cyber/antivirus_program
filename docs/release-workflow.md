@@ -182,6 +182,10 @@ Important boundary:
 - this workflow does not require a real GitHub Release
 - this workflow does not require network publication to be considered complete
 
+For future distribution and artifact-boundary design, use:
+
+- [packaging-strategy.md](packaging-strategy.md)
+
 ## Environment Repro Entry Points
 
 For environment and dependency reproduction, use the existing repository entrypoints instead of inventing a separate large release-prep environment manual:
