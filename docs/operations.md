@@ -1161,3 +1161,11 @@ For dry-run rehearsal and traceable release-prep records, also use:
 
 - [release-prep-dry-run.md](release-prep-dry-run.md)
 - [release-notes-dry-run-example.md](release-notes-dry-run-example.md)
+
+For a quick local readiness precheck before the heavier dry-run or acceptance steps, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_release_readiness.ps1
+```
+
+Treat it as a release prep quick gate only. It does not replace the final acceptance baseline gates.

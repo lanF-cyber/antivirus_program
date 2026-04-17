@@ -11,6 +11,14 @@ Important use rule:
 
 This worksheet supports baseline-aware release prep. It does not create a real release, real tag, or package artifact.
 
+Recommended first step before filling a copied dry-run record:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_release_readiness.ps1
+```
+
+That helper is a quick local precheck only. It does not replace the final acceptance gates.
+
 ## Candidate
 
 - Candidate version:

@@ -148,6 +148,17 @@ Use these companion documents:
 - [release-notes-template.md](release-notes-template.md)
   - reusable future release entry template
 
+Before a larger dry-run or final release prep pass, start with the quick local readiness precheck:
+
+- `powershell -ExecutionPolicy Bypass -File .\scripts\verify_release_readiness.ps1`
+
+Important boundary:
+
+- this helper is a release prep quick gate / readiness precheck
+- it is not a substitute for the acceptance scripts
+- it checks `origin/main` alignment against local refs only
+- it does not fetch, tag, publish, or modify repository state
+
 ## Baseline-Aware Delivery
 
 Release preparation is baseline-aware, not package-aware.

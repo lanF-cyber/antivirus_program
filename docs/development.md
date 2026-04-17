@@ -389,3 +389,11 @@ For dry-run rehearsal and a baseline worksheet, also use:
 
 - [release-prep-dry-run.md](release-prep-dry-run.md)
 - [release-notes-dry-run-example.md](release-notes-dry-run-example.md)
+
+Before a larger release-prep pass, run the quick local readiness precheck:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_release_readiness.ps1
+```
+
+This is a release prep quick gate only. It does not replace the final acceptance gates.
