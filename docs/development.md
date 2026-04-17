@@ -401,3 +401,29 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify_release_readiness.ps1
 ```
 
 This is a release prep quick gate only. It does not replace the final acceptance gates.
+
+## Packaging staging-tree prototype
+
+For the maintainer-facing packaging staging-tree prototype, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\assemble_packaging_staging_tree.ps1
+```
+
+This produces local prototype output under:
+
+```text
+reports/packaging-staging/<timestamp>/
+```
+
+To re-run the structure check against an existing staging run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_packaging_staging_tree.ps1 -RunDirectory .\reports\packaging-staging\<timestamp>
+```
+
+Important boundary:
+
+- this is disposable local output
+- it is not a formal release artifact
+- it should not be committed
