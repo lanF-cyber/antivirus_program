@@ -432,3 +432,36 @@ Important boundary:
 - it is not a formal release artifact
 - it should not be committed
 - after changing the manifest, re-run assemble and then re-run verify
+
+## Local zip packaging prototype
+
+The maintainer-side local packaging flow is:
+
+1. assemble
+2. verify staging
+3. package zip
+4. verify zip
+
+Use an existing staging run as the input:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package_packaging_staging_tree.ps1 -RunDirectory .\reports\packaging-staging\<timestamp>
+```
+
+Then verify the archive-level output:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_packaged_zip_artifact.ps1 -RunDirectory .\reports\packaging-staging\<timestamp>
+```
+
+The zip, fingerprint, and zip-check records are written back into the same local run directory:
+
+```text
+reports/packaging-staging/<timestamp>/
+```
+
+Important boundary:
+
+- this is disposable local output
+- it is not a formal release artifact
+- it should not be committed
