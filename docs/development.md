@@ -441,6 +441,7 @@ The maintainer-side local packaging flow is:
 2. verify staging
 3. package zip
 4. verify zip
+5. compare consistency
 
 Use an existing staging run as the input:
 
@@ -454,6 +455,12 @@ Then verify the archive-level output:
 powershell -ExecutionPolicy Bypass -File .\scripts\verify_packaged_zip_artifact.ps1 -RunDirectory .\reports\packaging-staging\<timestamp>
 ```
 
+If you want to compare two completed local zip runs for consistency under the current local prototype profile:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\compare_packaged_zip_consistency.ps1 -BaselineRunDirectory .\reports\packaging-staging\<baseline-timestamp> -CandidateRunDirectory .\reports\packaging-staging\<candidate-timestamp>
+```
+
 The zip, fingerprint, and zip-check records are written back into the same local run directory:
 
 ```text
@@ -465,3 +472,5 @@ Important boundary:
 - this is disposable local output
 - it is not a formal release artifact
 - it should not be committed
+- `zip_sha256` consistency is a goal under the current local prototype profile only
+- it is not a public reproducible-build commitment for a future formal release

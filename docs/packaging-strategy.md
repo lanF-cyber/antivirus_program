@@ -318,6 +318,12 @@ Current prototype note:
 - `packaging/packaging-manifest.json` is the repo-tracked maintainer-side assembly source of truth for the staging-tree prototype
 - it does not belong to the future operator-facing artifact contract
 
+Current local zip prototype note:
+
+- the maintainer-side local zip prototype now targets a deterministic profile named `normalized-zip-v1`
+- this is a local consistency-tightening measure for repeatable prototype output
+- it is not a public reproducible-build commitment for a future formal release artifact
+
 ### Manifest rule shape
 
 Include entries should be defined with:

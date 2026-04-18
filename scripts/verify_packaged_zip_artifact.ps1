@@ -10,6 +10,14 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $generatorScript = "scripts/verify_packaged_zip_artifact.ps1"
 $verificationBasis = "zip-level verification is based on archive entry inspection only, not extraction-based runtime validation."
+$expectedReproducibilityProfile = "normalized-zip-v1"
+$expectedNormalizedEntryTimestampUtc = "2000-01-01T00:00:00Z"
+$expectedNormalizedEntryTimestamp = [DateTimeOffset]::ParseExact(
+    $expectedNormalizedEntryTimestampUtc,
+    "yyyy-MM-ddTHH:mm:ssZ",
+    [System.Globalization.CultureInfo]::InvariantCulture,
+    [System.Globalization.DateTimeStyles]::AssumeUniversal
+)
 
 function Write-Check {
     param(
@@ -111,6 +119,39 @@ function Test-RequiredDirectoryEntry {
     return $false
 }
 
+function Get-NormalizedEntryNamesHash {
+    param([string[]]$NormalizedEntryNames)
+
+    $joinedNames = $NormalizedEntryNames -join "`n"
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($joinedNames)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $sha256.ComputeHash($bytes)
+        return ([System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLowerInvariant())
+    } finally {
+        $sha256.Dispose()
+    }
+}
+
+function Test-NormalizedArchiveTimestamp {
+    param(
+        [Parameter(Mandatory = $true)]
+        [DateTimeOffset]$Timestamp,
+
+        [Parameter(Mandatory = $true)]
+        [DateTimeOffset]$ExpectedTimestamp
+    )
+
+    return (
+        $Timestamp.Year -eq $ExpectedTimestamp.Year -and
+        $Timestamp.Month -eq $ExpectedTimestamp.Month -and
+        $Timestamp.Day -eq $ExpectedTimestamp.Day -and
+        $Timestamp.Hour -eq $ExpectedTimestamp.Hour -and
+        $Timestamp.Minute -eq $ExpectedTimestamp.Minute -and
+        $Timestamp.Second -eq $ExpectedTimestamp.Second
+    )
+}
+
 $script:passCount = 0
 $script:warnCount = 0
 $script:failCount = 0
@@ -185,6 +226,7 @@ if ($fingerprintFindings.Count -eq 0) {
 $normalizedEntryNames = @()
 $artifactRelativeEntries = @()
 $topLevelSegments = @()
+$actualEntryTimestamps = @()
 
 if ($zipExists) {
     $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
@@ -196,6 +238,7 @@ if ($zipExists) {
             }
 
             $normalizedEntryNames += $normalizedEntryName
+            $actualEntryTimestamps += $entry.LastWriteTime
             $trimmedEntry = $normalizedEntryName.Trim('/')
             if ([string]::IsNullOrWhiteSpace($trimmedEntry)) {
                 continue
@@ -221,6 +264,7 @@ if ($zipExists) {
 }
 
 $topLevelDirectories = @($topLevelSegments | Sort-Object -Unique)
+$actualArchiveEntryCount = $normalizedEntryNames.Count
 $zipRootFindings = @()
 if (-not $zipExists) {
     $zipRootFindings += "zip file is missing"
@@ -236,6 +280,59 @@ if ($zipRootFindings.Count -eq 0) {
     Register-Result "PASS" "Zip root" "Archive contains exactly one normalized top-level directory with the expected name."
 } else {
     Register-Result "FAIL" "Zip root" ($zipRootFindings -join "; ")
+}
+
+$expectedNormalizedEntryNames = @()
+if ($zipExists -and $topLevelDirectories.Count -eq 1 -and $topLevelDirectories[0] -eq $artifactRootName) {
+    $rootEntry = $artifactRootName + "/"
+    $directoryEntries = @($normalizedEntryNames | Where-Object {
+        $_ -ne $rootEntry -and $_.EndsWith("/")
+    } | Sort-Object)
+    $fileEntries = @($normalizedEntryNames | Where-Object {
+        -not $_.EndsWith("/")
+    } | Sort-Object)
+    $expectedNormalizedEntryNames = @($rootEntry) + $directoryEntries + $fileEntries
+}
+
+$entryOrderStatus = "not_checked"
+$entryOrderFindings = @()
+if (-not $zipExists) {
+    $entryOrderFindings += "zip file is missing"
+} elseif ($expectedNormalizedEntryNames.Count -eq 0) {
+    $entryOrderFindings += "expected normalized entry sequence could not be derived"
+} else {
+    $actualSequence = $normalizedEntryNames -join "`n"
+    $expectedSequence = $expectedNormalizedEntryNames -join "`n"
+    if ($actualSequence -ne $expectedSequence) {
+        $entryOrderFindings += "archive entries are not stored in normalized-zip-v1 order"
+        $entryOrderStatus = "invalid"
+    } else {
+        $entryOrderStatus = "valid"
+    }
+}
+
+if ($entryOrderFindings.Count -eq 0) {
+    Register-Result "PASS" "Entry order" "Archive entries follow the normalized-zip-v1 sequence."
+} else {
+    Register-Result "FAIL" "Entry order" ($entryOrderFindings -join "; ")
+}
+
+$timestampFindings = @()
+if (-not $zipExists) {
+    $timestampFindings += "zip file is missing"
+} else {
+    foreach ($timestamp in $actualEntryTimestamps) {
+        if (-not (Test-NormalizedArchiveTimestamp -Timestamp $timestamp -ExpectedTimestamp $expectedNormalizedEntryTimestamp)) {
+            $timestampFindings += "archive entry timestamps are not normalized"
+            break
+        }
+    }
+}
+
+if ($timestampFindings.Count -eq 0) {
+    Register-Result "PASS" "Entry timestamps" "Archive entry timestamps are normalized."
+} else {
+    Register-Result "FAIL" "Entry timestamps" ($timestampFindings -join "; ")
 }
 
 $requiredFileEntries = @(
@@ -291,6 +388,35 @@ if ($forbiddenEntryFindings.Count -eq 0) {
     Register-Result "FAIL" "Forbidden entries" ($forbiddenEntryFindings -join "; ")
 }
 
+$actualNormalizedEntryNamesHash = if ($zipExists) {
+    Get-NormalizedEntryNamesHash -NormalizedEntryNames $normalizedEntryNames
+} else {
+    $null
+}
+
+$profileFindings = @()
+if ([string]$fingerprintRecord.zip_reproducibility_profile -ne $expectedReproducibilityProfile) {
+    $profileFindings += "zip_reproducibility_profile must be '$expectedReproducibilityProfile'"
+}
+if ([string]$fingerprintRecord.normalized_entry_timestamp_utc -ne $expectedNormalizedEntryTimestampUtc) {
+    $profileFindings += "normalized_entry_timestamp_utc must be '$expectedNormalizedEntryTimestampUtc'"
+}
+if ([int]$fingerprintRecord.archive_entry_count -ne $actualArchiveEntryCount) {
+    $profileFindings += "archive_entry_count does not match the actual archive entry count"
+}
+if ([string]$fingerprintRecord.top_level_root_name -ne $artifactRootName) {
+    $profileFindings += "top_level_root_name does not match artifact_root_name"
+}
+if ([string]$fingerprintRecord.normalized_entry_names_sha256 -ne $actualNormalizedEntryNamesHash) {
+    $profileFindings += "normalized_entry_names_sha256 does not match the actual normalized entry sequence"
+}
+
+if ($profileFindings.Count -eq 0) {
+    Register-Result "PASS" "Reproducibility profile" "Fingerprint reproducibility fields match the normalized archive profile."
+} else {
+    Register-Result "FAIL" "Reproducibility profile" ($profileFindings -join "; ")
+}
+
 $overall = if ($failCount -gt 0) { "FAIL" } elseif ($warnCount -gt 0) { "WARN" } else { "PASS" }
 $zipCheckRecord = [ordered]@{
     generated_at_utc = [DateTime]::UtcNow.ToString("o")
@@ -302,6 +428,11 @@ $zipCheckRecord = [ordered]@{
     warn_count = $warnCount
     fail_count = $failCount
     verification_basis = $verificationBasis
+    reproducibility_profile = $expectedReproducibilityProfile
+    normalized_entry_timestamp_utc = $expectedNormalizedEntryTimestampUtc
+    actual_archive_entry_count = $actualArchiveEntryCount
+    actual_normalized_entry_names_sha256 = $actualNormalizedEntryNamesHash
+    entry_order_status = $entryOrderStatus
     checks = $checkResults
 }
 

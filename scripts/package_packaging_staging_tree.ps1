@@ -10,6 +10,14 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $generatorScript = "scripts/package_packaging_staging_tree.ps1"
 $stagingVerifyScript = Join-Path $root "scripts\verify_packaging_staging_tree.ps1"
+$zipReproducibilityProfile = "normalized-zip-v1"
+$normalizedEntryTimestampUtc = "2000-01-01T00:00:00Z"
+$normalizedEntryTimestamp = [DateTimeOffset]::ParseExact(
+    $normalizedEntryTimestampUtc,
+    "yyyy-MM-ddTHH:mm:ssZ",
+    [System.Globalization.CultureInfo]::InvariantCulture,
+    [System.Globalization.DateTimeStyles]::AssumeUniversal
+)
 
 function Resolve-RunDirectoryPath {
     param([string]$Value)
@@ -80,42 +88,80 @@ function New-ZipFromArtifactRoot {
     param(
         [string]$ArtifactRootPath,
         [string]$ArtifactRootName,
-        [string]$ZipPath
+        [string]$ZipPath,
+        [DateTimeOffset]$EntryTimestamp
     )
 
     if (Test-Path -LiteralPath $ZipPath) {
         Remove-Item -LiteralPath $ZipPath -Force
     }
 
+    $directoryEntries = @(
+        Get-ChildItem -LiteralPath $ArtifactRootPath -Recurse -Force -Directory |
+            ForEach-Object { Get-NormalizedRelativePath -BasePath $ArtifactRootPath -TargetPath $_.FullName } |
+            Sort-Object
+    )
+    $fileEntries = @(
+        Get-ChildItem -LiteralPath $ArtifactRootPath -Recurse -Force -File |
+            ForEach-Object { Get-NormalizedRelativePath -BasePath $ArtifactRootPath -TargetPath $_.FullName } |
+            Sort-Object
+    )
+
+    $normalizedEntryNames = @($ArtifactRootName + "/")
+    foreach ($relativePath in $directoryEntries) {
+        $normalizedEntryNames += ($ArtifactRootName + "/" + ($relativePath.Trim('/') + "/"))
+    }
+    foreach ($relativePath in $fileEntries) {
+        $normalizedEntryNames += ($ArtifactRootName + "/" + $relativePath.Trim('/'))
+    }
+
     $zipStream = [System.IO.File]::Open($ZipPath, [System.IO.FileMode]::CreateNew)
     try {
         $archive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create, $false)
         try {
-            $null = $archive.CreateEntry(($ArtifactRootName + "/"))
+            foreach ($entryName in $normalizedEntryNames) {
+                $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+                $entry.LastWriteTime = $EntryTimestamp
 
-            $directories = @(Get-ChildItem -LiteralPath $ArtifactRootPath -Recurse -Force -Directory | Sort-Object FullName)
-            foreach ($directory in $directories) {
-                $relativePath = Get-NormalizedRelativePath -BasePath $ArtifactRootPath -TargetPath $directory.FullName
-                $entryName = $ArtifactRootName + "/" + ($relativePath.Trim('/') + "/")
-                $null = $archive.CreateEntry($entryName)
-            }
+                if ($entryName.EndsWith("/")) {
+                    continue
+                }
 
-            $files = @(Get-ChildItem -LiteralPath $ArtifactRootPath -Recurse -Force -File | Sort-Object FullName)
-            foreach ($file in $files) {
-                $relativePath = Get-NormalizedRelativePath -BasePath $ArtifactRootPath -TargetPath $file.FullName
-                $entryName = $ArtifactRootName + "/" + $relativePath.Trim('/')
-                $null = [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                    $archive,
-                    $file.FullName,
-                    $entryName,
-                    [System.IO.Compression.CompressionLevel]::Optimal
-                )
+                $artifactRelativePath = $entryName.Substring(($ArtifactRootName + "/").Length)
+                $sourcePath = Join-Path $ArtifactRootPath ($artifactRelativePath -replace '/', '\')
+                $sourceStream = [System.IO.File]::OpenRead($sourcePath)
+                try {
+                    $entryStream = $entry.Open()
+                    try {
+                        $sourceStream.CopyTo($entryStream)
+                    } finally {
+                        $entryStream.Dispose()
+                    }
+                } finally {
+                    $sourceStream.Dispose()
+                }
             }
         } finally {
             $archive.Dispose()
         }
     } finally {
         $zipStream.Dispose()
+    }
+
+    return @($normalizedEntryNames)
+}
+
+function Get-NormalizedEntryNamesHash {
+    param([string[]]$NormalizedEntryNames)
+
+    $joinedNames = $NormalizedEntryNames -join "`n"
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($joinedNames)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $sha256.ComputeHash($bytes)
+        return ([System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLowerInvariant())
+    } finally {
+        $sha256.Dispose()
     }
 }
 
@@ -167,7 +213,7 @@ $stagingVerifyRecord = Invoke-StagingVerify -RunDirectoryPath $runDirectoryPath 
 
 $zipName = $artifactRootName + ".zip"
 $zipPath = Join-Path $runDirectoryPath $zipName
-New-ZipFromArtifactRoot -ArtifactRootPath $artifactRootPath -ArtifactRootName $artifactRootName -ZipPath $zipPath
+$normalizedEntryNames = New-ZipFromArtifactRoot -ArtifactRootPath $artifactRootPath -ArtifactRootName $artifactRootName -ZipPath $zipPath -EntryTimestamp $normalizedEntryTimestamp
 
 if (-not (Test-Path -LiteralPath $zipPath -PathType Leaf)) {
     throw "Zip packaging did not produce $zipPath."
@@ -175,6 +221,7 @@ if (-not (Test-Path -LiteralPath $zipPath -PathType Leaf)) {
 
 $zipHash = Get-FileHash -LiteralPath $zipPath -Algorithm SHA256
 $zipItem = Get-Item -LiteralPath $zipPath
+$normalizedEntryNamesHash = Get-NormalizedEntryNamesHash -NormalizedEntryNames $normalizedEntryNames
 
 $fingerprintRecord = [ordered]@{
     generated_at_utc = [DateTime]::UtcNow.ToString("o")
@@ -189,9 +236,14 @@ $fingerprintRecord = [ordered]@{
     source_commit = $assemblyRecord.source_commit
     manifest_source = $assemblyRecord.manifest_source
     manifest_version = $assemblyRecord.manifest_version
+    zip_reproducibility_profile = $zipReproducibilityProfile
     zip_sha256_algorithm = "sha256"
     zip_sha256 = $zipHash.Hash.ToLowerInvariant()
     size_bytes = [int64]$zipItem.Length
+    normalized_entry_timestamp_utc = $normalizedEntryTimestampUtc
+    archive_entry_count = $normalizedEntryNames.Count
+    top_level_root_name = $artifactRootName
+    normalized_entry_names_sha256 = $normalizedEntryNamesHash
     staging_verify_path = $smokeCheckPath
     staging_verify_overall = $stagingVerifyRecord.overall
 }
