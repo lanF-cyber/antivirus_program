@@ -410,6 +410,10 @@ For the maintainer-facing packaging staging-tree prototype, use:
 powershell -ExecutionPolicy Bypass -File .\scripts\assemble_packaging_staging_tree.ps1
 ```
 
+The current staging-tree prototype is driven by:
+
+- `packaging/packaging-manifest.json`
+
 This produces local prototype output under:
 
 ```text
@@ -427,3 +431,4 @@ Important boundary:
 - this is disposable local output
 - it is not a formal release artifact
 - it should not be committed
+- after changing the manifest, re-run assemble and then re-run verify

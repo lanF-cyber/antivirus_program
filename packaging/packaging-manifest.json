@@ -1,0 +1,258 @@
+{
+  "manifest_version": 1,
+  "artifact": {
+    "platform": "windows-x64",
+    "artifact_root_template": "scanbox-v{version}-{platform}",
+    "runtime_root": "runtime/scanbox",
+    "notes": [
+      "Repo-tracked maintainer-side assembly source of truth for the packaging staging-tree prototype.",
+      "This manifest is not part of the future operator-facing artifact contract."
+    ]
+  },
+  "include_mappings": [
+    {
+      "id": "root_readme",
+      "source": "README.md",
+      "destination": "README.md",
+      "kind": "file",
+      "required": true,
+      "operator_facing": true,
+      "notes": "operator-facing top-level entrypoint"
+    },
+    {
+      "id": "root_pyproject",
+      "source": "pyproject.toml",
+      "destination": "pyproject.toml",
+      "kind": "file",
+      "required": true,
+      "operator_facing": false,
+      "notes": "version metadata visibility and artifact traceability"
+    },
+    {
+      "id": "runtime_scanbox",
+      "source": "src/scanbox",
+      "destination": "runtime/scanbox",
+      "kind": "directory",
+      "required": true,
+      "operator_facing": false,
+      "notes": "artifact-internal runtime subset"
+    },
+    {
+      "id": "config_scanbox_template",
+      "source": "config/scanbox.toml",
+      "destination": "config/scanbox.toml",
+      "kind": "file",
+      "required": true,
+      "operator_facing": true,
+      "notes": "default scanbox config template"
+    },
+    {
+      "id": "config_freshclam_template",
+      "source": "config/clamav/freshclam.conf",
+      "destination": "config/clamav/freshclam.conf",
+      "kind": "file",
+      "required": true,
+      "operator_facing": true,
+      "notes": "default freshclam config template"
+    },
+    {
+      "id": "rules_yara_bundled",
+      "source": "rules/yara/bundled",
+      "destination": "rules/yara/bundled",
+      "kind": "directory",
+      "required": true,
+      "operator_facing": false,
+      "notes": "bundled YARA runtime content"
+    },
+    {
+      "id": "rules_yara_manifest",
+      "source": "rules/yara/manifest.json",
+      "destination": "rules/yara/manifest.json",
+      "kind": "file",
+      "required": true,
+      "operator_facing": false,
+      "notes": "bundled YARA rule metadata"
+    },
+    {
+      "id": "rules_capa_bundled",
+      "source": "rules/capa/bundled",
+      "destination": "rules/capa/bundled",
+      "kind": "directory",
+      "required": true,
+      "operator_facing": false,
+      "notes": "bundled capa runtime content"
+    },
+    {
+      "id": "rules_capa_manifest",
+      "source": "rules/capa/manifest.json",
+      "destination": "rules/capa/manifest.json",
+      "kind": "file",
+      "required": true,
+      "operator_facing": false,
+      "notes": "bundled capa rule metadata"
+    },
+    {
+      "id": "script_verify_env",
+      "source": "scripts/verify_env.ps1",
+      "destination": "scripts/verify_env.ps1",
+      "kind": "file",
+      "required": true,
+      "operator_facing": true,
+      "notes": "operator-facing environment verification helper"
+    },
+    {
+      "id": "docs_dependencies",
+      "source": "docs/dependencies.md",
+      "destination": "docs/dependencies.md",
+      "kind": "file",
+      "required": true,
+      "operator_facing": true,
+      "notes": "operator-facing dependency reference subset"
+    }
+  ],
+  "exclude_rules": [
+    {
+      "id": "repo_tests",
+      "pattern": "tests/**",
+      "scope": "hard",
+      "category": "repo_only",
+      "reason": "tests stay repo-only"
+    },
+    {
+      "id": "repo_reports",
+      "pattern": "reports/**",
+      "scope": "hard",
+      "category": "repo_only",
+      "reason": "local reports stay repo-only"
+    },
+    {
+      "id": "repo_git_metadata",
+      "pattern": ".git/**",
+      "scope": "hard",
+      "category": "repo_only",
+      "reason": "source-control metadata stays repo-only"
+    },
+    {
+      "id": "repo_virtualenv",
+      "pattern": ".venv/**",
+      "scope": "hard",
+      "category": "repo_only",
+      "reason": "local virtualenv stays repo-only"
+    },
+    {
+      "id": "repo_acceptance_scripts",
+      "pattern": "scripts/acceptance_*.ps1",
+      "scope": "hard",
+      "category": "repo_only",
+      "reason": "acceptance scripts remain maintainer-only"
+    },
+    {
+      "id": "repo_release_readiness_script",
+      "pattern": "scripts/verify_release_readiness.ps1",
+      "scope": "hard",
+      "category": "repo_only",
+      "reason": "release readiness helper remains maintainer-only"
+    },
+    {
+      "id": "repo_release_docs",
+      "pattern": "docs/release-*.md",
+      "scope": "hard",
+      "category": "repo_only",
+      "reason": "release workflow documents remain repo-only"
+    },
+    {
+      "id": "repo_milestone_docs",
+      "pattern": "docs/milestones/**",
+      "scope": "hard",
+      "category": "repo_only",
+      "reason": "milestone baseline documents remain repo-only"
+    },
+    {
+      "id": "external_scanbox_local_config",
+      "pattern": "config/scanbox.local.toml",
+      "scope": "hard",
+      "category": "external",
+      "reason": "workstation-local config stays outside the artifact"
+    },
+    {
+      "id": "external_freshclam_local_config",
+      "pattern": "config/clamav/freshclam.local.conf",
+      "scope": "hard",
+      "category": "external",
+      "reason": "workstation-local freshclam config stays outside the artifact"
+    },
+    {
+      "id": "transient_runtime_pycache_root",
+      "pattern": "runtime/scanbox/__pycache__",
+      "scope": "hard",
+      "category": "transient",
+      "reason": "python cache directories stay out of the artifact"
+    },
+    {
+      "id": "transient_runtime_pycache_nested",
+      "pattern": "runtime/scanbox/**/__pycache__",
+      "scope": "hard",
+      "category": "transient",
+      "reason": "nested python cache directories stay out of the artifact"
+    },
+    {
+      "id": "transient_runtime_pycache_root_contents",
+      "pattern": "runtime/scanbox/__pycache__/**",
+      "scope": "hard",
+      "category": "transient",
+      "reason": "python cache contents stay out of the artifact"
+    },
+    {
+      "id": "transient_runtime_pycache_nested_contents",
+      "pattern": "runtime/scanbox/**/__pycache__/**",
+      "scope": "hard",
+      "category": "transient",
+      "reason": "nested python cache contents stay out of the artifact"
+    },
+    {
+      "id": "transient_runtime_pyc_root",
+      "pattern": "runtime/scanbox/*.pyc",
+      "scope": "hard",
+      "category": "transient",
+      "reason": "top-level bytecode stays out of the artifact"
+    },
+    {
+      "id": "transient_runtime_pyc_nested",
+      "pattern": "runtime/scanbox/**/*.pyc",
+      "scope": "hard",
+      "category": "transient",
+      "reason": "nested bytecode stays out of the artifact"
+    },
+    {
+      "id": "metadata_capa_github_root",
+      "pattern": "rules/capa/bundled/.github",
+      "scope": "scoped",
+      "category": "metadata",
+      "reason": "vendored repo-service metadata is not part of the artifact"
+    },
+    {
+      "id": "metadata_capa_github_nested",
+      "pattern": "rules/capa/bundled/.github/**",
+      "scope": "scoped",
+      "category": "metadata",
+      "reason": "vendored repo-service metadata is not part of the artifact"
+    },
+    {
+      "id": "metadata_capa_gitattributes",
+      "pattern": "rules/capa/bundled/.gitattributes",
+      "scope": "scoped",
+      "category": "metadata",
+      "reason": "vendored repo metadata is not part of the artifact"
+    },
+    {
+      "id": "metadata_capa_readme",
+      "pattern": "rules/capa/bundled/README.md",
+      "scope": "scoped",
+      "category": "metadata",
+      "reason": "vendored README is not required in the first operator-facing subset"
+    }
+  ],
+  "retain_first_paths": [
+    "rules/capa/bundled/LICENSE.txt"
+  ]
+}

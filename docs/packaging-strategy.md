@@ -313,6 +313,11 @@ The future artifact should treat third-party notices conservatively:
 
 Future packaging should be driven by a maintainer-side manifest model rather than by ad hoc copy rules.
 
+Current prototype note:
+
+- `packaging/packaging-manifest.json` is the repo-tracked maintainer-side assembly source of truth for the staging-tree prototype
+- it does not belong to the future operator-facing artifact contract
+
 ### Manifest rule shape
 
 Include entries should be defined with:
