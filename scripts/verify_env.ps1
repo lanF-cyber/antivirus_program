@@ -5,6 +5,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
+$repoPackageRoot = Join-Path $root "src\scanbox"
+$artifactPackageRoot = Join-Path $root "runtime\scanbox"
 
 function Resolve-RepoPath {
     param([string]$Value)
@@ -36,14 +38,26 @@ function Write-Check {
     }
 }
 
+$hasRepoPackageRoot = Test-Path -LiteralPath $repoPackageRoot -PathType Container
+$hasArtifactPackageRoot = Test-Path -LiteralPath $artifactPackageRoot -PathType Container
+
+if ($hasRepoPackageRoot -and -not $hasArtifactPackageRoot) {
+    $context = "repo"
+} elseif ($hasArtifactPackageRoot -and -not $hasRepoPackageRoot) {
+    $context = "artifact"
+} else {
+    Write-Check "FAIL" "Context" "verify_env.ps1 requires exactly one context. repo mode expects src/scanbox only. artifact mode expects runtime/scanbox only."
+    exit 1
+}
+
 $pythonResolved = Resolve-RepoPath $PythonExe
-if (-not $pythonResolved -or -not (Test-Path -LiteralPath $pythonResolved)) {
+if (-not $pythonResolved -or -not (Test-Path -LiteralPath $pythonResolved -PathType Leaf)) {
     Write-Check "FAIL" "Python" "Python executable was not found. Use .\.venv\Scripts\python.exe or pass -PythonExe with a valid path."
     exit 1
 }
 
 $configResolved = Resolve-RepoPath $ConfigPath
-if (-not $configResolved -or -not (Test-Path -LiteralPath $configResolved)) {
+if (-not $configResolved -or -not (Test-Path -LiteralPath $configResolved -PathType Leaf)) {
     Write-Check "FAIL" "Config" "Configuration file was not found. Check the -ConfigPath argument and verify config/scanbox.toml exists."
     exit 1
 }
@@ -155,9 +169,23 @@ def read_env_overrides() -> dict:
 
 root = pathlib.Path(sys.argv[1]).resolve()
 config_path = pathlib.Path(sys.argv[2]).resolve()
+context = sys.argv[3]
 local_config_path = derive_local_override_path(config_path)
 venv_python = (root / ".venv" / "Scripts" / "python.exe").resolve()
 current_python = pathlib.Path(sys.executable).resolve()
+repo_package_root = (root / "src" / "scanbox").resolve()
+artifact_runtime_root = (root / "runtime").resolve()
+artifact_package_root = (artifact_runtime_root / "scanbox").resolve()
+
+if context == "repo":
+    if artifact_package_root.exists() or not repo_package_root.exists():
+        raise SystemExit(json.dumps({"context_error": "repo mode requires src/scanbox only"}))
+elif context == "artifact":
+    if repo_package_root.exists() or not artifact_package_root.exists():
+        raise SystemExit(json.dumps({"context_error": "artifact mode requires runtime/scanbox only"}))
+    sys.path.insert(0, str(artifact_runtime_root))
+else:
+    raise SystemExit(json.dumps({"context_error": f"unsupported context: {context}"}))
 
 with config_path.open("rb") as handle:
     config = tomllib.load(handle)
@@ -217,16 +245,17 @@ def inspect_ruleset(rules_dir: pathlib.Path | None, manifest_path: pathlib.Path 
 
 
 scanbox_module_path = None
-scanbox_editable = False
 scanbox_import_error = None
 scanbox_direct_url = None
+
+expected_module_root = repo_package_root / "__init__.py" if context == "repo" else artifact_package_root / "__init__.py"
+source_matches_context = False
 
 try:
     import scanbox
 
     scanbox_module_path = pathlib.Path(scanbox.__file__).resolve()
-    expected_module_root = (root / "src" / "scanbox" / "__init__.py").resolve()
-    scanbox_editable = scanbox_module_path == expected_module_root
+    source_matches_context = scanbox_module_path == expected_module_root.resolve()
 except Exception as exc:  # noqa: BLE001
     scanbox_import_error = str(exc)
 
@@ -249,6 +278,7 @@ capa_rules_dir = resolve_config_path(capa.get("rules_dir"))
 capa_manifest = resolve_config_path(capa.get("manifest"))
 
 result = {
+    "context": context,
     "root": str(root),
     "config_path": str(config_path),
     "local_config_path": str(local_config_path) if local_config_path else None,
@@ -256,11 +286,12 @@ result = {
     "python": {
         "current": str(current_python),
         "venv_expected": str(venv_python),
-        "is_repo_venv": current_python == venv_python,
+        "is_root_venv": current_python == venv_python,
     },
     "scanbox": {
-        "editable_install": scanbox_editable,
+        "expected_module_path": str(expected_module_root.resolve()),
         "module_path": str(scanbox_module_path) if scanbox_module_path else None,
+        "source_matches_context": source_matches_context,
         "import_error": scanbox_import_error,
         "direct_url": scanbox_direct_url,
     },
@@ -301,7 +332,7 @@ print(json.dumps(result))
 '@
 
 try {
-    $rawSummary = $pythonScript | & $pythonResolved - $root $configResolved
+    $rawSummary = $pythonScript | & $pythonResolved - $root $configResolved $context
 } catch {
     Write-Check "FAIL" "Python" "Failed to run the Python inspection logic. Verify Python, dependencies, and config readability."
     Write-Host $_.Exception.Message
@@ -348,7 +379,8 @@ function Register-Result {
 }
 
 Write-Host "ScanBox environment verification"
-Write-Host "Repo root: $($summary.root)"
+Write-Host "Context: $($summary.context)"
+Write-Host "Root: $($summary.root)"
 Write-Host "Config: $($summary.config_path)"
 if ($summary.local_config_path) {
     if ($summary.local_config_exists) {
@@ -360,18 +392,30 @@ if ($summary.local_config_path) {
 Write-Host "Python: $($summary.python.current)"
 Write-Host ""
 
-if ($summary.python.is_repo_venv) {
-    Register-Result "PASS" "Python/venv" "The current Python executable is the repository .venv interpreter."
+if ($summary.python.is_root_venv) {
+    Register-Result "PASS" "Python/venv" "The current Python executable is the local .venv interpreter under the active root."
 } else {
-    Register-Result "WARN" "Python/venv" "The current Python executable is not the repository .venv interpreter. Prefer .\.venv\Scripts\python.exe."
+    Register-Result "WARN" "Python/venv" "The current Python executable is not the local .venv interpreter under the active root. Prefer .\.venv\Scripts\python.exe."
 }
 
-if ($summary.scanbox.editable_install) {
-    Register-Result "PASS" "Editable install" "scanbox resolves to this repository via editable install."
-} elseif ($summary.scanbox.import_error) {
-    Register-Result "FAIL" "Editable install" "scanbox could not be imported. Run .\.venv\Scripts\python.exe -m pip install -e ."
+if ($summary.context -eq "repo") {
+    if ($summary.scanbox.source_matches_context) {
+        Register-Result "PASS" "Editable install" "scanbox resolves to this repository via editable install."
+    } elseif ($summary.scanbox.import_error) {
+        Register-Result "FAIL" "Editable install" "scanbox could not be imported. Run .\.venv\Scripts\python.exe -m pip install -e ."
+    } else {
+        Register-Result "FAIL" "Editable install" "scanbox is importable, but not from this repository. Re-run .\.venv\Scripts\python.exe -m pip install -e ."
+    }
+} elseif ($summary.context -eq "artifact") {
+    if ($summary.scanbox.source_matches_context) {
+        Register-Result "PASS" "Artifact runtime import" "scanbox resolves from the unpacked artifact runtime directory."
+    } elseif ($summary.scanbox.import_error) {
+        Register-Result "FAIL" "Artifact runtime import" "scanbox could not be imported from the unpacked artifact runtime."
+    } else {
+        Register-Result "FAIL" "Artifact runtime import" "scanbox imported, but not from the unpacked artifact runtime directory."
+    }
 } else {
-    Register-Result "FAIL" "Editable install" "scanbox is importable, but not from this repository. Re-run .\.venv\Scripts\python.exe -m pip install -e ."
+    Register-Result "FAIL" "Context" "Unsupported verify_env context."
 }
 
 if ($summary.clamav.enabled) {
@@ -461,7 +505,7 @@ if ($summary.capa.enabled) {
     $capaDeclaredRuleCount = if ($null -ne $summary.capa.declared_rule_count) { [int]$summary.capa.declared_rule_count } else { $null }
 
     if ($capaVendorStatus -eq "placeholder") {
-        Register-Result "WARN" "capa vendor status" "capa-rules are still a placeholder. Vendor the official v9.3.0 snapshot into rules/capa/bundled/ before treating capa as ready."
+        Register-Result "WARN" "capa vendor status" "capa-rules are still a placeholder. Vendor the official snapshot before treating capa as ready."
     } elseif ($capaVendorStatus -eq "vendored") {
         Register-Result "PASS" "capa vendor status" "Manifest marks the bundled capa rules as vendored."
     } else {
@@ -487,10 +531,6 @@ if ($summary.capa.enabled) {
         Register-Result "FAIL" "capa manifest consistency" "Manifest does not match the bundled capa rules directory: $reasons."
     } else {
         Register-Result "PASS" "capa manifest consistency" "Manifest and bundled capa rules directory are internally consistent."
-    }
-
-    if ($summary.capa.notes) {
-        Write-Host "capa notes: $($summary.capa.notes)"
     }
 }
 

@@ -37,6 +37,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify_env.ps1
 .\.venv\Scripts\python.exe -m scanbox scan .\tests\fixtures\benign\hello.txt
 ```
 
+If you are starting from an unpacked release zip rather than a repository checkout, start with [QUICKSTART.md](QUICKSTART.md).
+
 ## Quick Demo
 
 Fastest project walkthrough:

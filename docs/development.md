@@ -474,3 +474,33 @@ Important boundary:
 - it should not be committed
 - `zip_sha256` consistency is a goal under the current local prototype profile only
 - it is not a public reproducible-build commitment for a future formal release
+
+## Operator zip consumption validation
+
+To validate the unpacked operator-facing path against an existing local zip run, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\validate_operator_zip_consumption.ps1 -RunDirectory .\reports\packaging-staging\<timestamp> -BasePythonExe .\.venv\Scripts\python.exe
+```
+
+This validation flow is maintainer-facing and runs the current operator-path sequence:
+
+1. `assemble`
+2. `verify staging`
+3. `package zip`
+4. `verify zip`
+5. `validate unpacked operator path`
+
+Current validation mode:
+
+- `yara_only_first_run`
+- creates a disposable unpacked artifact workspace under the same run directory
+- creates a disposable artifact-local `.venv`
+- creates a temporary `config/scanbox.local.toml` only for the validation run
+- writes `operator-consumption-validation.json` back into the same run directory
+
+Important boundary:
+
+- this is disposable local output
+- it is not a formal release artifact
+- it should not be committed

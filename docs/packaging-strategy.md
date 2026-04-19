@@ -90,6 +90,8 @@ Important boundary:
 ```text
 scanbox-vX.Y.Z-windows-x64/
   README.md
+  QUICKSTART.md
+  requirements.txt
   pyproject.toml
   runtime/
     scanbox/
@@ -106,6 +108,7 @@ scanbox-vX.Y.Z-windows-x64/
       manifest.json
   scripts/
     verify_env.ps1
+    run_scanbox.ps1
   docs/
     dependencies.md
 ```
@@ -121,6 +124,8 @@ scanbox-vX.Y.Z-windows-x64/
   - this carries the bundled rule subsets and manifests needed for runtime behavior
 - `scripts/verify_env.ps1`
   - this remains the operator-facing verification entrypoint
+- `scripts/run_scanbox.ps1`
+  - this is the operator-facing launcher for unpacked artifact use
 - `docs/dependencies.md`
   - this is a selective operator doc include, not a signal that the full `docs/` tree belongs in the artifact
 
@@ -175,6 +180,8 @@ The initial explicit mapping set should be:
 | Repo source | Artifact destination | Why it is copied |
 | --- | --- | --- |
 | `README.md` | `README.md` | top-level operator entrypoint |
+| `QUICKSTART.md` | `QUICKSTART.md` | operator-facing unpacked artifact quickstart |
+| `requirements.txt` | `requirements.txt` | runtime-only Python dependency entrypoint |
 | `pyproject.toml` | `pyproject.toml` | version metadata visibility and traceability |
 | `src/scanbox/` | `runtime/scanbox/` | artifact-internal runtime subset |
 | `config/scanbox.toml` | `config/scanbox.toml` | default config template |
@@ -184,6 +191,7 @@ The initial explicit mapping set should be:
 | `rules/capa/bundled/` | `rules/capa/bundled/` | bundled capa runtime content |
 | `rules/capa/manifest.json` | `rules/capa/manifest.json` | capa rule metadata |
 | `scripts/verify_env.ps1` | `scripts/verify_env.ps1` | operator-facing verification helper |
+| `scripts/run_scanbox.ps1` | `scripts/run_scanbox.ps1` | operator-facing unpacked artifact launcher |
 | `docs/dependencies.md` | `docs/dependencies.md` | operator-facing dependency/setup reference |
 
 ## Alternatives And Trade-Offs
@@ -248,6 +256,8 @@ The future single-folder artifact should use a filtered manifest model rather th
 | Artifact-era path | Source of truth today | Inclusion status | Notes |
 | --- | --- | --- | --- |
 | `README.md` | repo root | include | operator-facing top-level entrypoint |
+| `QUICKSTART.md` | repo root | include | operator-facing unpacked artifact quickstart |
+| `requirements.txt` | repo root | include | runtime-only Python dependency entrypoint |
 | `pyproject.toml` | repo root | include | version metadata visibility and release traceability |
 | `runtime/scanbox/` | `src/scanbox/` | include | artifact-era runtime subset, not a direct repo-path contract |
 | `config/scanbox.toml` | `config/scanbox.toml` | include | default config template |
@@ -257,6 +267,7 @@ The future single-folder artifact should use a filtered manifest model rather th
 | `rules/capa/bundled/` | `rules/capa/bundled/` | include | bundled capa rules subset |
 | `rules/capa/manifest.json` | `rules/capa/manifest.json` | include | bundled capa metadata |
 | `scripts/verify_env.ps1` | `scripts/verify_env.ps1` | include | operator-facing verification helper |
+| `scripts/run_scanbox.ps1` | `scripts/run_scanbox.ps1` | include | operator-facing unpacked artifact launcher |
 | `docs/dependencies.md` | `docs/dependencies.md` | include | operator-facing docs subset only |
 
 Important documentation boundary:
@@ -323,6 +334,12 @@ Current local zip prototype note:
 - the maintainer-side local zip prototype now targets a deterministic profile named `normalized-zip-v1`
 - this is a local consistency-tightening measure for repeatable prototype output
 - it is not a public reproducible-build commitment for a future formal release artifact
+
+Current operator-path note:
+
+- the current operator-facing quickstart path is intentionally a `YARA-only first run`
+- it exists to validate unpacked artifact consumption without requiring immediate ClamAV or capa wiring
+- it does not replace the fuller external dependency setup described in `docs/dependencies.md`
 
 ### Manifest rule shape
 

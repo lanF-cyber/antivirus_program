@@ -20,6 +20,24 @@
       "notes": "operator-facing top-level entrypoint"
     },
     {
+      "id": "root_quickstart",
+      "source": "QUICKSTART.md",
+      "destination": "QUICKSTART.md",
+      "kind": "file",
+      "required": true,
+      "operator_facing": true,
+      "notes": "operator-facing unpacked artifact quickstart"
+    },
+    {
+      "id": "root_requirements",
+      "source": "requirements.txt",
+      "destination": "requirements.txt",
+      "kind": "file",
+      "required": true,
+      "operator_facing": true,
+      "notes": "runtime-only Python dependency entrypoint for unpacked artifact use"
+    },
+    {
       "id": "root_pyproject",
       "source": "pyproject.toml",
       "destination": "pyproject.toml",
@@ -99,6 +117,15 @@
       "required": true,
       "operator_facing": true,
       "notes": "operator-facing environment verification helper"
+    },
+    {
+      "id": "script_run_scanbox",
+      "source": "scripts/run_scanbox.ps1",
+      "destination": "scripts/run_scanbox.ps1",
+      "kind": "file",
+      "required": true,
+      "operator_facing": true,
+      "notes": "operator-facing unpacked artifact launcher"
     },
     {
       "id": "docs_dependencies",

@@ -337,12 +337,15 @@ if ($timestampFindings.Count -eq 0) {
 
 $requiredFileEntries = @(
     "README.md",
+    "QUICKSTART.md",
+    "requirements.txt",
     "pyproject.toml",
     "config/scanbox.toml",
     "config/clamav/freshclam.conf",
     "rules/yara/manifest.json",
     "rules/capa/manifest.json",
     "scripts/verify_env.ps1",
+    "scripts/run_scanbox.ps1",
     "docs/dependencies.md",
     "rules/capa/bundled/LICENSE.txt"
 )
