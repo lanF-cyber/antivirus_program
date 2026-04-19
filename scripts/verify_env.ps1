@@ -326,6 +326,22 @@ result = {
         "executable_exists": bool(capa_executable and capa_executable.exists()),
         **inspect_ruleset(capa_rules_dir, capa_manifest, CAPA_RULE_EXTENSIONS, True),
     },
+    "artifact_profile": (
+        "yara_only_first_run"
+        if context == "artifact" and not bool(clamav.get("enabled", True)) and not bool(capa.get("enabled", True))
+        else (
+            "full_external_dependency_path"
+            if context == "artifact"
+            else None
+        )
+    ),
+    "dependency_expectations": {
+        "runtime_python": "required",
+        "bundled_yara": "required",
+        "clamav": "optional_for_yara_only_first_run",
+        "capa": "optional_for_yara_only_first_run",
+        "full_external_dependencies": "required_for_full_external_dependency_path",
+    },
 }
 
 print(json.dumps(result))
@@ -390,6 +406,15 @@ if ($summary.local_config_path) {
     }
 }
 Write-Host "Python: $($summary.python.current)"
+if ($summary.context -eq "artifact") {
+    Write-Host "Profile: $($summary.artifact_profile)"
+    Write-Host ("Dependency expectations: runtime_python={0}; bundled_yara={1}; clamav={2}; capa={3}; full_external_dependencies={4}" -f `
+        $summary.dependency_expectations.runtime_python, `
+        $summary.dependency_expectations.bundled_yara, `
+        $summary.dependency_expectations.clamav, `
+        $summary.dependency_expectations.capa, `
+        $summary.dependency_expectations.full_external_dependencies)
+}
 Write-Host ""
 
 if ($summary.python.is_root_venv) {

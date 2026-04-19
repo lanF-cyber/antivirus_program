@@ -34,6 +34,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify_env.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\run_scanbox.ps1 -PythonExe .\.venv\Scripts\python.exe scan .\README.md
 ```
 
+## Support Boundary
+
+The supported operator path assumes a working `venv`, a working `pip`, and access to the runtime dependency source used by `requirements.txt`.
+
+The `config/scanbox.local.toml` file in this quickstart is a temporary first-run override only. Maintainer-side validation fallbacks are not part of the operator contract.
+
 ## What this first run proves
 
 - the unpacked artifact layout is internally usable

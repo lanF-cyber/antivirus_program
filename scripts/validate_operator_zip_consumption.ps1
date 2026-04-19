@@ -93,6 +93,50 @@ function Get-VerifyOverall {
     return "FAIL"
 }
 
+function Get-VerifyContext {
+    param([string]$CommandOutput)
+
+    if ($CommandOutput -match '(?m)^Context:\s+([A-Za-z_][A-Za-z0-9_]*)\s*$') {
+        return $Matches[1]
+    }
+
+    return "not_detected"
+}
+
+function Get-ValidationClassification {
+    param(
+        [bool]$FallbackUsed,
+        [string]$VerifyEnvOverall,
+        [int]$ScanExitCode,
+        [string[]]$BlockingGaps
+    )
+
+    $supportedOperatorPathOverall = "FAIL"
+    $fallbackAssistedOverall = "FAIL"
+
+    if (-not $FallbackUsed -and $VerifyEnvOverall -eq "PASS" -and $ScanExitCode -eq 0 -and $BlockingGaps.Count -eq 0) {
+        $supportedOperatorPathOverall = "PASS"
+    }
+
+    if ($VerifyEnvOverall -eq "PASS" -and $ScanExitCode -eq 0 -and $BlockingGaps.Count -eq 0) {
+        $fallbackAssistedOverall = "PASS"
+    }
+
+    $overall = if ($supportedOperatorPathOverall -eq "PASS") {
+        "PASS"
+    } elseif ($fallbackAssistedOverall -eq "PASS") {
+        "WARN"
+    } else {
+        "FAIL"
+    }
+
+    return [pscustomobject]@{
+        SupportedOperatorPathOverall = $supportedOperatorPathOverall
+        FallbackAssistedOverall = $fallbackAssistedOverall
+        Overall = $overall
+    }
+}
+
 function New-UtcTimestamp {
     return [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssZ")
 }
@@ -158,9 +202,11 @@ $localOverridePath = Join-Path $artifactRoot "config\scanbox.local.toml"
 $localTempRoot = Join-Path $artifactRoot ".local-temp"
 
 $gaps = @()
+$blockingGaps = @()
 $notes = @()
 $verifyEnvExitCode = $null
 $verifyEnvOverall = "not_run"
+$verifyEnvContext = "not_detected"
 $scanExitCode = $null
 $quickstartDocPresent = $false
 $requirementsPresent = $false
@@ -168,6 +214,14 @@ $zipVerifyOverall = "not_run"
 $venvCreateExitCode = $null
 $pipInstallExitCode = $null
 $usedVenvFallback = $false
+$fallbackSteps = @()
+$dependencyExpectations = [ordered]@{
+    runtime_python = "required"
+    bundled_yara = "required"
+    clamav = "optional_for_yara_only_first_run"
+    capa = "optional_for_yara_only_first_run"
+    full_external_dependencies = "required_for_full_external_dependency_path"
+}
 
 $zipVerifyResult = Invoke-NativeCapture -FilePath "powershell" -Arguments @(
     "-ExecutionPolicy", "Bypass",
@@ -184,29 +238,33 @@ if (Test-Path -LiteralPath $zipCheckPath -PathType Leaf) {
 
 if ($zipVerifyResult.ExitCode -ne 0 -or $zipVerifyOverall -ne "PASS") {
     $gaps += "zip_verify_not_pass"
+    $blockingGaps += "zip_verify_not_pass"
 }
 
-if ($gaps.Count -eq 0) {
+if ($blockingGaps.Count -eq 0) {
     Expand-Archive -LiteralPath $fingerprintRecord.zip_path -DestinationPath $unpackRoot -Force
 
     if (-not (Test-Path -LiteralPath $artifactRoot -PathType Container)) {
         $gaps += "artifact_root_missing_after_unpack"
+        $blockingGaps += "artifact_root_missing_after_unpack"
     }
 }
 
-if ($gaps.Count -eq 0) {
+if ($blockingGaps.Count -eq 0) {
     $quickstartDocPresent = Test-Path -LiteralPath $quickstartPath -PathType Leaf
     $requirementsPresent = Test-Path -LiteralPath $requirementsPath -PathType Leaf
 
     if (-not $quickstartDocPresent) {
         $gaps += "quickstart_missing"
+        $blockingGaps += "quickstart_missing"
     }
     if (-not $requirementsPresent) {
         $gaps += "requirements_missing"
+        $blockingGaps += "requirements_missing"
     }
 }
 
-if ($gaps.Count -eq 0) {
+if ($blockingGaps.Count -eq 0) {
     New-Item -ItemType Directory -Force -Path $localTempRoot | Out-Null
     $tempEnvironment = @{
         TEMP = $localTempRoot
@@ -230,17 +288,21 @@ if ($gaps.Count -eq 0) {
         $venvCreateExitCode = $fallbackVenvResult.ExitCode
         if ($venvCreateExitCode -ne 0) {
             $gaps += "venv_create_failed"
+            $blockingGaps += "venv_create_failed"
             if ($fallbackVenvResult.Text) {
                 $notes += "venv_create_fallback_output=" + $fallbackVenvResult.Text
             }
         } else {
             $usedVenvFallback = $true
-            $notes += "venv_create_fallback=without_pip"
+            $fallbackSteps += "venv_without_pip"
+            if ($gaps -notcontains "supported_path_venv_with_pip_unavailable") {
+                $gaps += "supported_path_venv_with_pip_unavailable"
+            }
         }
     }
 }
 
-if ($gaps.Count -eq 0) {
+if ($blockingGaps.Count -eq 0) {
     if ($usedVenvFallback) {
         $pipInstallResult = Invoke-NativeCapture -FilePath $basePythonResolved -Arguments @("-m", "pip", "install", "--target", ".\.venv\Lib\site-packages", "-r", ".\requirements.txt") -WorkingDirectory $artifactRoot -EnvironmentOverrides $tempEnvironment
     } else {
@@ -257,18 +319,21 @@ if ($gaps.Count -eq 0) {
 
         if ([string]::IsNullOrWhiteSpace($baseSitePackages) -or [string]::IsNullOrWhiteSpace($artifactSitePackages)) {
             $gaps += "pip_install_failed"
+            $blockingGaps += "pip_install_failed"
         } else {
-            $copiedFallback = $true
             Get-ChildItem -LiteralPath $baseSitePackages -Force | ForEach-Object {
                 Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $artifactSitePackages $_.Name) -Recurse -Force
             }
             $pipInstallExitCode = 0
-            $notes += "pip_install_fallback=copy_base_site_packages"
+            $fallbackSteps += "copy_base_site_packages"
+            if ($gaps -notcontains "supported_path_runtime_dependency_install_unavailable") {
+                $gaps += "supported_path_runtime_dependency_install_unavailable"
+            }
         }
     }
 }
 
-if ($gaps.Count -eq 0) {
+if ($blockingGaps.Count -eq 0) {
     $localOverrideContent = @"
 [engines.clamav]
 enabled = false
@@ -285,15 +350,17 @@ enabled = false
     ) -WorkingDirectory $artifactRoot -EnvironmentOverrides $tempEnvironment
     $verifyEnvExitCode = $verifyEnvResult.ExitCode
     $verifyEnvOverall = Get-VerifyOverall -CommandOutput $verifyEnvResult.Text -ExitCode $verifyEnvExitCode
+    $verifyEnvContext = Get-VerifyContext -CommandOutput $verifyEnvResult.Text
     if ($verifyEnvOverall -ne "PASS") {
         $gaps += "verify_env_not_pass"
+        $blockingGaps += "verify_env_not_pass"
         if ($verifyEnvResult.Text) {
             $notes += "verify_env_output=" + $verifyEnvResult.Text
         }
     }
 }
 
-if ($gaps.Count -eq 0) {
+if ($blockingGaps.Count -eq 0) {
     $scanArgs = @(
         "-ExecutionPolicy", "Bypass",
         "-File", ".\scripts\run_scanbox.ps1",
@@ -304,13 +371,26 @@ if ($gaps.Count -eq 0) {
     $scanExitCode = $scanResult.ExitCode
     if ($scanExitCode -ne 0) {
         $gaps += "minimal_scan_failed"
+        $blockingGaps += "minimal_scan_failed"
         if ($scanResult.Text) {
             $notes += "scan_output=" + $scanResult.Text
         }
     }
 }
 
-$overall = if ($gaps.Count -eq 0) { "PASS" } else { "FAIL" }
+$fallbackUsed = ($fallbackSteps.Count -gt 0)
+$classification = Get-ValidationClassification -FallbackUsed $fallbackUsed -VerifyEnvOverall $verifyEnvOverall -ScanExitCode $scanExitCode -BlockingGaps $blockingGaps
+$supportedOperatorPathOverall = $classification.SupportedOperatorPathOverall
+$fallbackAssistedOverall = $classification.FallbackAssistedOverall
+$overall = $classification.Overall
+
+if ($fallbackUsed -and $supportedOperatorPathOverall -eq "PASS") {
+    throw "supported_operator_path_overall must not be PASS when fallback was used."
+}
+
+if ($overall -eq "WARN" -and -not ($gaps | Where-Object { $_ -like 'supported_path_*' })) {
+    throw "overall=WARNING requires at least one portability-oriented supported_path_* gap."
+}
 
 $validationRecord = [ordered]@{
     generated_at_utc = [DateTime]::UtcNow.ToString("o")
@@ -321,6 +401,8 @@ $validationRecord = [ordered]@{
     python_exe = $artifactPythonExe
     base_python_exe = $basePythonResolved
     quickstart_mode = "yara_only_first_run"
+    verify_env_context = $verifyEnvContext
+    dependency_expectations = $dependencyExpectations
     quickstart_doc_present = $quickstartDocPresent
     requirements_present = $requirementsPresent
     zip_verify_overall = $zipVerifyOverall
@@ -328,6 +410,10 @@ $validationRecord = [ordered]@{
     verify_env_overall = $verifyEnvOverall
     venv_create_exit_code = $venvCreateExitCode
     pip_install_exit_code = $pipInstallExitCode
+    fallback_used = $fallbackUsed
+    fallback_steps = $fallbackSteps
+    supported_operator_path_overall = $supportedOperatorPathOverall
+    fallback_assisted_overall = $fallbackAssistedOverall
     scan_command = "powershell -ExecutionPolicy Bypass -File .\scripts\run_scanbox.ps1 -PythonExe .\.venv\Scripts\python.exe scan .\README.md"
     scan_exit_code = $scanExitCode
     overall = $overall
@@ -342,7 +428,7 @@ Write-Host "Run directory: $runDirectoryPath"
 Write-Host "Validation record: $validationRecordPath"
 Write-Host "Summary: OVERALL=$overall"
 
-if ($overall -ne "PASS") {
+if ($overall -eq "FAIL") {
     exit 1
 }
 

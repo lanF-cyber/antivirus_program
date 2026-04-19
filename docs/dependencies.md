@@ -17,7 +17,9 @@ Important boundary:
 
 - `requirements.txt` is runtime-only
 - it does not include pytest, lint, or editable-install semantics
+- a supported operator first run assumes a working `venv`, a working `pip`, and access to the runtime dependency source used by `requirements.txt`
 - ClamAV, capa, and the ClamAV database remain explicit operator-provided dependencies
+- ClamAV, capa, and the ClamAV database are not required for the `yara_only_first_run` quickstart path
 
 ## Runtime Python packages
 
@@ -84,6 +86,8 @@ Use `config/scanbox.local.toml` for workstation-specific paths such as:
 Use `config/clamav/freshclam.local.conf` for workstation-specific `freshclam` settings.
 
 These local override files are not part of the static artifact contents.
+
+Maintainer-side validation may use local fallback techniques to keep diagnosing portability gaps, but those fallbacks are not part of the supported operator path.
 
 ## Maintainer and workstation-specific notes
 

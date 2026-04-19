@@ -431,6 +431,8 @@ Important boundary:
 - this is disposable local output
 - it is not a formal release artifact
 - it should not be committed
+- fallback-assisted success only means the portability gap was diagnosed and bypassed for maintainer validation
+- it does not mean the supported operator path fully passed
 - after changing the manifest, re-run assemble and then re-run verify
 
 ## Local zip packaging prototype

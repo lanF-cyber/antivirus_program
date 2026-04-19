@@ -340,6 +340,8 @@ Current operator-path note:
 - the current operator-facing quickstart path is intentionally a `YARA-only first run`
 - it exists to validate unpacked artifact consumption without requiring immediate ClamAV or capa wiring
 - it does not replace the fuller external dependency setup described in `docs/dependencies.md`
+- maintainer-side validation may use local fallbacks to continue diagnosing portability gaps
+- those fallbacks are not part of the operator-facing artifact contract
 
 ### Manifest rule shape
 
