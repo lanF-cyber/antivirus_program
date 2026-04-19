@@ -369,6 +369,65 @@ The current known portability gaps are:
 
 These gaps explain why the current workstation validates as `WARN`. They do not mean the artifact is missing required static content, and they do not promote maintainer-side fallback into the supported operator contract.
 
+### Profile examples
+
+`supported_operator_path`
+
+- Typical conditions: artifact context succeeds, `venv` works, `pip` works, runtime dependency source is available, and no maintainer fallback is needed.
+- Expected record subset:
+  - `fallback_steps = []`
+  - `supported_operator_path_overall = PASS`
+  - `fallback_assisted_overall = PASS`
+  - `overall = PASS`
+  - `workstation_profile = supported_operator_path`
+
+`maintainer_fallback_assisted`
+
+- Typical conditions: artifact context succeeds, but the supported path is blocked by `venv` or runtime dependency install issues and maintainer-side fallback allows validation to complete.
+- Expected record subset:
+  - `fallback_steps = ["venv_without_pip", "copy_base_site_packages"]`
+  - `supported_operator_path_overall = FAIL`
+  - `fallback_assisted_overall = PASS`
+  - `overall = WARN`
+  - `workstation_profile = maintainer_fallback_assisted`
+  - `gaps` contains portability-oriented `supported_path_*` entries
+
+`unsupported_operator_path`
+
+- Typical conditions: artifact context fails, required artifact content is missing, or verify/scan still cannot complete after fallback-assisted validation.
+- Expected record subset:
+  - `supported_operator_path_overall = FAIL`
+  - `fallback_assisted_overall = FAIL`
+  - `overall = FAIL`
+  - `workstation_profile = unsupported_operator_path`
+- This is a classification example only. It does not imply the current repository already has a real workstation sample with this outcome.
+
+### Validation record semantics
+
+- `workstation_profile`
+  - derived only from the fixed `(supported_operator_path_overall, fallback_assisted_overall, overall)` tuple
+- `supported_operator_path_overall`
+  - records whether the strict supported operator path succeeded without maintainer fallback
+- `fallback_assisted_overall`
+  - records whether maintainer-side fallback still allowed validation to complete
+- `overall`
+  - `PASS` means supported path success
+  - `WARN` means fallback-assisted diagnostic success
+  - `FAIL` means validation did not complete even with fallback assistance
+- `fallback_steps`
+  - records only the fallback steps that actually ran, with case-sensitive first-occurrence order preserved
+- `gaps`
+  - records machine-readable gap ids, with case-sensitive first-occurrence order preserved
+- `dependency_expectations`
+  - uses a fixed key set and fixed expectation vocabulary for record stability
+
+Gaps interpretation:
+
+- `supported_path_*` identifies portability-oriented gaps
+- these gaps explain why `WARN` happened
+- they do not mean required static artifact content is missing
+- they do not promote maintainer-side fallback into the supported operator contract
+
 ### Manifest rule shape
 
 Include entries should be defined with:

@@ -137,6 +137,127 @@ function Get-ValidationClassification {
     }
 }
 
+function Get-CaseSensitiveDistinctList {
+    param([string[]]$Values)
+
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    $result = New-Object 'System.Collections.Generic.List[string]'
+
+    foreach ($value in @($Values)) {
+        if ($null -eq $value) {
+            continue
+        }
+
+        $candidate = [string]$value
+        if ($seen.Add($candidate)) {
+            [void]$result.Add($candidate)
+        }
+    }
+
+    return @($result)
+}
+
+function Assert-DependencyExpectationsShape {
+    param($DependencyExpectations)
+
+    $expectedKeys = @(
+        "runtime_python",
+        "bundled_yara",
+        "clamav",
+        "capa",
+        "full_external_dependencies"
+    )
+    $allowedValues = @(
+        "required",
+        "optional_for_yara_only_first_run",
+        "required_for_full_external_dependency_path"
+    )
+
+    $actualKeys = @($DependencyExpectations.Keys)
+    if (($actualKeys.Count -ne $expectedKeys.Count) -or ((@($actualKeys) -join "`n") -ne (@($expectedKeys) -join "`n"))) {
+        throw "dependency_expectations keys must stay fixed and ordered."
+    }
+
+    foreach ($key in $expectedKeys) {
+        if ($allowedValues -notcontains [string]$DependencyExpectations[$key]) {
+            throw "dependency_expectations contains an unsupported value for '$key'."
+        }
+    }
+}
+
+function Get-WorkstationProfileFromTuple {
+    param(
+        [string]$SupportedOperatorPathOverall,
+        [string]$FallbackAssistedOverall,
+        [string]$Overall
+    )
+
+    $tuple = "$SupportedOperatorPathOverall|$FallbackAssistedOverall|$Overall"
+    switch ($tuple) {
+        "PASS|PASS|PASS" { return "supported_operator_path" }
+        "FAIL|PASS|WARN" { return "maintainer_fallback_assisted" }
+        "FAIL|FAIL|FAIL" { return "unsupported_operator_path" }
+        default { throw "Unsupported validation classification tuple: $tuple" }
+    }
+}
+
+function Assert-ValidationRecordInvariants {
+    param(
+        [string]$SupportedOperatorPathOverall,
+        [string]$FallbackAssistedOverall,
+        [string]$Overall,
+        [string]$WorkstationProfile,
+        [string[]]$FallbackSteps,
+        [string[]]$Gaps
+    )
+
+    if ($FallbackSteps.Count -gt 0 -and $SupportedOperatorPathOverall -eq "PASS") {
+        throw "supported_operator_path_overall must not be PASS when fallback_steps is non-empty."
+    }
+
+    switch ($Overall) {
+        "PASS" {
+            if ($SupportedOperatorPathOverall -ne "PASS" -or $FallbackAssistedOverall -ne "PASS") {
+                throw "overall=PASS requires tuple PASS/PASS/PASS."
+            }
+            if ($FallbackSteps.Count -ne 0) {
+                throw "overall=PASS requires fallback_steps to be empty."
+            }
+            if ($Gaps.Count -ne 0) {
+                throw "overall=PASS requires gaps to be empty."
+            }
+            if ($WorkstationProfile -ne "supported_operator_path") {
+                throw "overall=PASS requires workstation_profile=supported_operator_path."
+            }
+        }
+        "WARN" {
+            if ($SupportedOperatorPathOverall -ne "FAIL" -or $FallbackAssistedOverall -ne "PASS") {
+                throw "overall=WARN requires tuple FAIL/PASS/WARN."
+            }
+            if (-not ($Gaps | Where-Object { $_ -like 'supported_path_*' })) {
+                throw "overall=WARN requires at least one portability-oriented supported_path_* gap."
+            }
+            if ($WorkstationProfile -ne "maintainer_fallback_assisted") {
+                throw "overall=WARN requires workstation_profile=maintainer_fallback_assisted."
+            }
+        }
+        "FAIL" {
+            if ($SupportedOperatorPathOverall -ne "FAIL") {
+                throw "overall=FAIL requires supported_operator_path_overall=FAIL."
+            }
+            if ($FallbackAssistedOverall -ne "FAIL") {
+                throw "overall=FAIL requires tuple FAIL/FAIL/FAIL."
+            }
+            if ($WorkstationProfile -ne "unsupported_operator_path") {
+                throw "overall=FAIL requires workstation_profile=unsupported_operator_path."
+            }
+        }
+        default {
+            throw "Unsupported overall classification: $Overall"
+        }
+    }
+}
+
 function New-UtcTimestamp {
     return [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssZ")
 }
@@ -295,9 +416,7 @@ if ($blockingGaps.Count -eq 0) {
         } else {
             $usedVenvFallback = $true
             $fallbackSteps += "venv_without_pip"
-            if ($gaps -notcontains "supported_path_venv_with_pip_unavailable") {
-                $gaps += "supported_path_venv_with_pip_unavailable"
-            }
+            $gaps += "supported_path_venv_with_pip_unavailable"
         }
     }
 }
@@ -326,9 +445,7 @@ if ($blockingGaps.Count -eq 0) {
             }
             $pipInstallExitCode = 0
             $fallbackSteps += "copy_base_site_packages"
-            if ($gaps -notcontains "supported_path_runtime_dependency_install_unavailable") {
-                $gaps += "supported_path_runtime_dependency_install_unavailable"
-            }
+            $gaps += "supported_path_runtime_dependency_install_unavailable"
         }
     }
 }
@@ -378,26 +495,17 @@ if ($blockingGaps.Count -eq 0) {
     }
 }
 
+$fallbackSteps = Get-CaseSensitiveDistinctList $fallbackSteps
+$gaps = Get-CaseSensitiveDistinctList $gaps
+Assert-DependencyExpectationsShape -DependencyExpectations $dependencyExpectations
+
 $fallbackUsed = ($fallbackSteps.Count -gt 0)
 $classification = Get-ValidationClassification -FallbackUsed $fallbackUsed -VerifyEnvOverall $verifyEnvOverall -ScanExitCode $scanExitCode -BlockingGaps $blockingGaps
 $supportedOperatorPathOverall = $classification.SupportedOperatorPathOverall
 $fallbackAssistedOverall = $classification.FallbackAssistedOverall
 $overall = $classification.Overall
-$workstationProfile = if ($overall -eq "PASS") {
-    "supported_operator_path"
-} elseif ($overall -eq "WARN") {
-    "maintainer_fallback_assisted"
-} else {
-    "unsupported_operator_path"
-}
-
-if ($fallbackUsed -and $supportedOperatorPathOverall -eq "PASS") {
-    throw "supported_operator_path_overall must not be PASS when fallback was used."
-}
-
-if ($overall -eq "WARN" -and -not ($gaps | Where-Object { $_ -like 'supported_path_*' })) {
-    throw "overall=WARNING requires at least one portability-oriented supported_path_* gap."
-}
+$workstationProfile = Get-WorkstationProfileFromTuple -SupportedOperatorPathOverall $supportedOperatorPathOverall -FallbackAssistedOverall $fallbackAssistedOverall -Overall $overall
+Assert-ValidationRecordInvariants -SupportedOperatorPathOverall $supportedOperatorPathOverall -FallbackAssistedOverall $fallbackAssistedOverall -Overall $overall -WorkstationProfile $workstationProfile -FallbackSteps $fallbackSteps -Gaps $gaps
 
 $validationRecord = [ordered]@{
     generated_at_utc = [DateTime]::UtcNow.ToString("o")

@@ -513,6 +513,19 @@ Workstation profile outcomes:
   - `overall = FAIL`
   - even fallback-assisted validation did not complete successfully
 
+Current workstation example:
+
+- on the current machine, the latest validation result is:
+  - `workstation_profile = maintainer_fallback_assisted`
+  - `supported_operator_path_overall = FAIL`
+  - `fallback_assisted_overall = PASS`
+  - `overall = WARN`
+- treat this as a current workstation example only, not as a global rule for every environment
+- read the record as:
+  - `PASS` = supported operator path
+  - `WARN` = fallback-assisted diagnostic success
+  - `FAIL` = fallback-assisted validation also did not succeed
+
 Important boundary:
 
 - this is disposable local output
