@@ -394,6 +394,11 @@ For dry-run rehearsal and a baseline worksheet, also use:
 - [release-prep-dry-run.md](release-prep-dry-run.md)
 - [release-notes-dry-run-example.md](release-notes-dry-run-example.md)
 
+For the full packaged release-candidate execution order, fixed gate interpretation, and evidence checklist, use:
+
+- [release-workflow.md](release-workflow.md)
+- [release-prep-dry-run.md](release-prep-dry-run.md)
+
 Before a larger release-prep pass, run the quick local readiness precheck:
 
 ```powershell

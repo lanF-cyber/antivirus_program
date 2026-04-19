@@ -9,7 +9,7 @@ Important use rule:
 - for an actual dry-run, copy this file and fill the copy
 - or generate a new instance from this structure for each dry-run record
 
-This worksheet supports baseline-aware release prep. It does not create a real release, real tag, or package artifact.
+This worksheet supports baseline-aware release prep. It does not create a real release, real tag, or formal published package artifact. It may still be used to record a local packaged candidate run.
 
 Recommended first step before filling a copied dry-run record:
 
@@ -90,6 +90,78 @@ That helper is a quick local precheck only. It does not replace the final accept
 - `docs/demo.md`:
 - milestone entrypoints:
 - Short note:
+
+## Packaged Candidate Evidence
+
+Use this section only for the current local packaged candidate run. Record only evidence files and statuses that already exist in the current repository workflow.
+
+### Candidate evidence
+
+- Packaged run directory:
+- `assembly-record.json` path:
+- `assembly-record.json` status:
+- `smoke-check.json` path:
+- `smoke-check.json` status:
+- Zip artifact path:
+- `artifact-fingerprint.json` path:
+- `zip-check.json` path:
+- `zip-check.json` status:
+- `operator-consumption-validation.json` path:
+- `operator-consumption-validation.json` status:
+- optional `zip-consistency-check.json` path:
+- optional `zip-consistency-check.json` status:
+
+### Disposable local diagnostics
+
+- Staged artifact root:
+- Unpacked operator validation directories:
+- Other temporary run-local diagnostics:
+- Short note:
+
+Important interpretation rule:
+
+- disposable local diagnostics may support investigation
+- they are not separate required evidence files
+
+## Packaged Candidate Interpretation
+
+Packaged candidate overall is derived from fixed gates. Do not replace it with free-form maintainer wording.
+
+Blocking gates:
+
+- `verify_release_readiness.ps1`
+- `acceptance_v1.ps1`
+- `acceptance_v2_quarantine.ps1`
+- `acceptance_v2_directory.ps1`
+- staging verify
+- zip verify
+- operator consumption validation
+
+Supportive optional evidence:
+
+- `compare_packaged_zip_consistency.ps1`
+
+Fixed packaged candidate derivation:
+
+- `FAIL`
+  - any blocking gate = `FAIL`
+- `WARN`
+  - all blocking gates before operator validation = `PASS`
+  - and `operator-consumption-validation.json` overall = `WARN`
+- `PASS`
+  - all blocking gates = `PASS`
+  - and `operator-consumption-validation.json` overall = `PASS`
+
+Explicit portability boundary:
+
+- operator validation `WARN` keeps the packaged candidate at `WARN`
+- operator validation `FAIL` makes the packaged candidate `FAIL`
+- consistency compare remains optional supportive evidence only
+
+- Candidate overall:
+- Portability note:
+- Blocking items:
+- Non-blocking follow-ups:
 
 ## Baseline References
 

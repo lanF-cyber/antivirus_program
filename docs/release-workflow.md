@@ -112,7 +112,7 @@ This workflow only establishes the future semver convention. It does not create 
 
 ## Release Prep Dry-Run
 
-Use a dry-run when the goal is to rehearse release prep without creating a real tag, a real package artifact, or a real GitHub Release.
+Use a dry-run when the goal is to rehearse release prep without creating a real tag, a formal published package artifact, or a real GitHub Release.
 
 Dry-run goals:
 
@@ -123,9 +123,10 @@ Dry-run goals:
 Dry-run boundaries:
 
 - no installer work
-- no packaging artifact
+- no formal published package artifact
 - no real tag creation
 - no real GitHub Release publication
+- local packaged candidate evidence may still be produced when the rehearsal explicitly includes the packaged candidate flow
 
 Dry-run repo checks should always include:
 
@@ -159,9 +160,152 @@ Important boundary:
 - it checks `origin/main` alignment against local refs only
 - it does not fetch, tag, publish, or modify repository state
 
+## Packaged Release Candidate Execution
+
+Use this flow when the goal is to produce a maintainer-facing packaged release candidate from the current repository state and record a traceable local evidence set.
+
+Important boundary:
+
+- this is a local packaged candidate discipline
+- it does not publish a GitHub Release
+- it does not create an installer
+- it does not change acceptance responsibilities
+- it does not expand the artifact contract
+
+For artifact boundary, operator subset, and portability policy, use:
+
+- [packaging-strategy.md](packaging-strategy.md)
+
+For the individual local command entrypoints, use:
+
+- [development.md](development.md)
+
+### Preconditions
+
+The packaged candidate flow assumes:
+
+- working tree is clean
+- current branch is `main`
+- local HEAD is aligned with `origin/main`
+- version is consistent in:
+  - `pyproject.toml`
+  - `src/scanbox/__init__.py`
+- the three baseline acceptance scripts remain the baseline gates with their existing responsibilities
+
+### Execution Order
+
+Run the packaged candidate flow in this order:
+
+1. `powershell -ExecutionPolicy Bypass -File .\scripts\verify_release_readiness.ps1`
+2. `powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v1.ps1`
+3. `powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_quarantine.ps1`
+4. `powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_v2_directory.ps1`
+5. `powershell -ExecutionPolicy Bypass -File .\scripts\assemble_packaging_staging_tree.ps1`
+6. `powershell -ExecutionPolicy Bypass -File .\scripts\verify_packaging_staging_tree.ps1 -RunDirectory .\reports\packaging-staging\<timestamp>`
+7. `powershell -ExecutionPolicy Bypass -File .\scripts\package_packaging_staging_tree.ps1 -RunDirectory .\reports\packaging-staging\<timestamp>`
+8. `powershell -ExecutionPolicy Bypass -File .\scripts\verify_packaged_zip_artifact.ps1 -RunDirectory .\reports\packaging-staging\<timestamp>`
+9. optional `powershell -ExecutionPolicy Bypass -File .\scripts\compare_packaged_zip_consistency.ps1 -BaselineRunDirectory .\reports\packaging-staging\<baseline-timestamp> -CandidateRunDirectory .\reports\packaging-staging\<timestamp>`
+10. `powershell -ExecutionPolicy Bypass -File .\scripts\validate_operator_zip_consumption.ps1 -RunDirectory .\reports\packaging-staging\<timestamp> -BasePythonExe .\.venv\Scripts\python.exe`
+
+Step-specific preconditions:
+
+- `verify_release_readiness.ps1`
+  - packaged candidate source has been selected
+- the three baseline acceptance scripts
+  - readiness precheck is already reviewed
+- `assemble_packaging_staging_tree.ps1`
+  - manifest and version sources are consistent
+- `verify_packaging_staging_tree.ps1`
+  - `assembly-record.json` exists for the target run
+- `package_packaging_staging_tree.ps1`
+  - staging verify overall = `PASS`
+- `verify_packaged_zip_artifact.ps1`
+  - zip artifact and `artifact-fingerprint.json` exist
+- `compare_packaged_zip_consistency.ps1`
+  - optional
+  - only when a comparable prior run exists
+  - both runs already have zip verify overall = `PASS`
+- `validate_operator_zip_consumption.ps1`
+  - zip verify overall = `PASS`
+  - maintainer supplies `-BasePythonExe`
+
+### Gate Types
+
+These are the packaged candidate gates:
+
+- blocking gates
+  - `verify_release_readiness.ps1`
+  - `acceptance_v1.ps1`
+  - `acceptance_v2_quarantine.ps1`
+  - `acceptance_v2_directory.ps1`
+  - staging verify
+  - zip verify
+  - operator consumption validation
+- optional supportive evidence
+  - `compare_packaged_zip_consistency.ps1`
+
+Important interpretation rules:
+
+- `verify_release_readiness.ps1` and the three baseline acceptance scripts remain blocking gates
+- later packaging evidence does not weaken those gates
+- consistency compare is optional
+- a missing consistency compare result does not downgrade the candidate
+- a consistency compare `PASS` only strengthens the evidence set
+- consistency compare does not become a new blocking gate here
+
+### Candidate Evidence
+
+Required candidate evidence-bearing outputs are:
+
+- packaged run directory
+- `assembly-record.json`
+- `smoke-check.json`
+- zip artifact
+- `artifact-fingerprint.json`
+- `zip-check.json`
+- `operator-consumption-validation.json`
+
+Optional supportive evidence is:
+
+- `zip-consistency-check.json`
+
+Disposable local diagnostics may still exist inside the same run, for example:
+
+- staged artifact root
+- unpacked operator validation directories
+- other temporary local workspaces under the run directory
+
+These diagnostics are disposable local state. They can support investigation, but they are not separate candidate evidence requirements.
+
+### Packaged Candidate Success Criteria
+
+Packaged candidate overall is derived only from the fixed gate combination below. It is not a free-form maintainer judgment.
+
+- candidate overall = `FAIL`
+  - if any blocking gate is `FAIL`
+- candidate overall = `WARN`
+  - only if all blocking gates before operator validation are `PASS`
+  - and `operator-consumption-validation.json` overall = `WARN`
+- candidate overall = `PASS`
+  - only if all blocking gates are `PASS`
+  - and `operator-consumption-validation.json` overall = `PASS`
+
+Explicit operator validation rules:
+
+- `operator-consumption-validation.json` overall = `WARN`
+  - packaged candidate overall must be `WARN`
+- `operator-consumption-validation.json` overall = `FAIL`
+  - packaged candidate overall must be `FAIL`
+
+Portability interpretation boundary:
+
+- operator validation `WARN` means the current workstation achieved fallback-assisted diagnostic success
+- it does not mean the supported operator path passed
+- it does not create a formal support promise
+
 ## Baseline-Aware Delivery
 
-Release preparation is baseline-aware, not package-aware.
+Release preparation is baseline-aware first. Packaged candidate execution is an additional maintainer-facing evidence flow, not a replacement for the baseline gates.
 
 That means the release preparation flow should always reference:
 
@@ -178,7 +322,7 @@ Use the three baseline acceptance scripts as release gates, not as mixed feature
 Important boundary:
 
 - acceptance scripts keep their current responsibilities
-- this workflow does not require a real package artifact
+- this workflow does not require a formal published package artifact
 - this workflow does not require a real GitHub Release
 - this workflow does not require network publication to be considered complete
 
