@@ -343,6 +343,32 @@ Current operator-path note:
 - maintainer-side validation may use local fallbacks to continue diagnosing portability gaps
 - those fallbacks are not part of the operator-facing artifact contract
 
+## Operator Consumption Portability Matrix
+
+The current portability matrix only covers:
+
+- unpacked zip consumption
+- `quickstart_mode = yara_only_first_run`
+
+It does not define a full external dependency portability matrix, and it is not a formal release portability commitment.
+
+### Workstation profiles
+
+| Workstation profile | Conditions | Expected outcome |
+| --- | --- | --- |
+| `supported_operator_path` | artifact context succeeds, `venv` works, `pip` works, runtime dependency source is available, no maintainer fallback is needed | `supported_operator_path_overall = PASS`, `fallback_assisted_overall = PASS`, `overall = PASS` |
+| `maintainer_fallback_assisted` | artifact context succeeds, supported path is blocked by `venv`/`pip`/runtime dependency source issues, but maintainer-side fallback allows validation to complete | `supported_operator_path_overall = FAIL`, `fallback_assisted_overall = PASS`, `overall = WARN` |
+| `unsupported_operator_path` | artifact context fails, required artifact content is missing, or verify/scan still cannot complete after fallback-assisted validation | `supported_operator_path_overall = FAIL`, `fallback_assisted_overall = FAIL`, `overall = FAIL` |
+
+### Current portability gaps
+
+The current known portability gaps are:
+
+- `supported_path_venv_with_pip_unavailable`
+- `supported_path_runtime_dependency_install_unavailable`
+
+These gaps explain why the current workstation validates as `WARN`. They do not mean the artifact is missing required static content, and they do not promote maintainer-side fallback into the supported operator contract.
+
 ### Manifest rule shape
 
 Include entries should be defined with:

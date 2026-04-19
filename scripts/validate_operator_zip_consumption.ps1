@@ -383,6 +383,13 @@ $classification = Get-ValidationClassification -FallbackUsed $fallbackUsed -Veri
 $supportedOperatorPathOverall = $classification.SupportedOperatorPathOverall
 $fallbackAssistedOverall = $classification.FallbackAssistedOverall
 $overall = $classification.Overall
+$workstationProfile = if ($overall -eq "PASS") {
+    "supported_operator_path"
+} elseif ($overall -eq "WARN") {
+    "maintainer_fallback_assisted"
+} else {
+    "unsupported_operator_path"
+}
 
 if ($fallbackUsed -and $supportedOperatorPathOverall -eq "PASS") {
     throw "supported_operator_path_overall must not be PASS when fallback was used."
@@ -414,6 +421,7 @@ $validationRecord = [ordered]@{
     fallback_steps = $fallbackSteps
     supported_operator_path_overall = $supportedOperatorPathOverall
     fallback_assisted_overall = $fallbackAssistedOverall
+    workstation_profile = $workstationProfile
     scan_command = "powershell -ExecutionPolicy Bypass -File .\scripts\run_scanbox.ps1 -PythonExe .\.venv\Scripts\python.exe scan .\README.md"
     scan_exit_code = $scanExitCode
     overall = $overall

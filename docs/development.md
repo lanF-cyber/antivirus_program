@@ -501,6 +501,18 @@ Current validation mode:
 - creates a temporary `config/scanbox.local.toml` only for the validation run
 - writes `operator-consumption-validation.json` back into the same run directory
 
+Workstation profile outcomes:
+
+- `supported_operator_path`
+  - `overall = PASS`
+  - the supported operator path completed without fallback
+- `maintainer_fallback_assisted`
+  - `overall = WARN`
+  - maintainer-side fallback allowed validation to complete, but the supported operator path did not fully pass
+- `unsupported_operator_path`
+  - `overall = FAIL`
+  - even fallback-assisted validation did not complete successfully
+
 Important boundary:
 
 - this is disposable local output
