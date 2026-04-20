@@ -184,9 +184,24 @@ If you want the full debugging report on disk while keeping a focused JSON on st
 
 ## Run tests
 
+Preferred maintainer entrypoint for standalone pytest:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_standalone_pytest.ps1
+```
+
+Lower-level direct command:
+
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
 ```
+
+Current note:
+
+- the helper is the hardened preferred path for standalone pytest on this workstation class
+- the raw command may still work, but it is not the preferred mitigated entrypoint
+- the helper only uses disposable local output under `reports/pytest-standalone/<timestamp>/`
+- those helper outputs are not part of the artifact contract or packaged candidate evidence contract
 
 ## Notes
 
@@ -249,10 +264,10 @@ Current boundary:
 - child results still use the single-file `ScanReport`
 - no batch quarantine in directory mode
 
-Directory scan regression currently rides on the normal test suite:
+Directory scan regression currently rides on the normal standalone test suite:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q
+powershell -ExecutionPolicy Bypass -File .\scripts\run_standalone_pytest.ps1
 ```
 
 ## V2.2-A freeze note
@@ -398,6 +413,10 @@ For the full packaged release-candidate execution order, fixed gate interpretati
 
 - [release-workflow.md](release-workflow.md)
 - [release-prep-dry-run.md](release-prep-dry-run.md)
+
+For the hardened standalone pytest maintainer entrypoint, use:
+
+- `powershell -ExecutionPolicy Bypass -File .\scripts\run_standalone_pytest.ps1`
 
 Before a larger release-prep pass, run the quick local readiness precheck:
 

@@ -104,11 +104,20 @@ This workflow only establishes the future semver convention. It does not create 
 
 ### Recommended Before Release
 
-- Run `.\.venv\Scripts\python.exe -m pytest -q`.
+- Run `powershell -ExecutionPolicy Bypass -File .\scripts\run_standalone_pytest.ps1`.
 - Run `powershell -ExecutionPolicy Bypass -File .\scripts\verify_env.ps1`.
 - Re-check [dependencies.md](dependencies.md), [operations.md](operations.md), and [development.md](development.md) so a maintainer can still reproduce the local environment and dependency wiring.
 - Re-check roadmap issue status against the planned release notes follow-ups.
 - If the release changes the public presentation layer, confirm `README.md` and [demo.md](demo.md) still support a short walkthrough.
+
+Standalone pytest remains a recommended check only. It is not a new blocking gate.
+
+Current standalone pytest note:
+
+- the helper is the hardened preferred path for standalone pytest
+- the raw `.\.venv\Scripts\python.exe -m pytest -q` command remains available as a lower-level direct command
+- the raw command may still work, but it is not the preferred mitigated entrypoint
+- helper output under `reports/pytest-standalone/<timestamp>/` is disposable local state only
 
 ## Release Prep Dry-Run
 
