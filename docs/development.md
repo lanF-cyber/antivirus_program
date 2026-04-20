@@ -555,3 +555,33 @@ Important boundary:
 - this is disposable local output
 - it is not a formal release artifact
 - it should not be committed
+
+## Packaged candidate rehearsal helper
+
+For the full maintainer-facing packaged candidate rehearsal flow, prefer:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_packaged_candidate_rehearsal.ps1 -BasePythonExe .\.venv\Scripts\python.exe
+```
+
+This helper is an orchestration convenience wrapper around the existing readiness, acceptance, packaging, zip verify, optional consistency compare, and operator validation entrypoints.
+
+It also writes a concise disposable evidence index under:
+
+```text
+reports/packaged-candidate-rehearsal/<timestamp>/
+```
+
+The index filename is:
+
+```text
+packaged-candidate-evidence-index.json
+```
+
+Important boundary:
+
+- this helper does not redefine the packaged candidate discipline
+- it does not change blocking gates
+- it does not replace the underlying evidence files
+- its evidence index is disposable local output only
+- it is not part of the artifact contract or candidate evidence contract

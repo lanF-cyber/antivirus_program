@@ -216,6 +216,19 @@ Run the packaged candidate flow in this order:
 9. optional `powershell -ExecutionPolicy Bypass -File .\scripts\compare_packaged_zip_consistency.ps1 -BaselineRunDirectory .\reports\packaging-staging\<baseline-timestamp> -CandidateRunDirectory .\reports\packaging-staging\<timestamp>`
 10. `powershell -ExecutionPolicy Bypass -File .\scripts\validate_operator_zip_consumption.ps1 -RunDirectory .\reports\packaging-staging\<timestamp> -BasePythonExe .\.venv\Scripts\python.exe`
 
+For a maintainer-facing convenience wrapper around the same flow, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_packaged_candidate_rehearsal.ps1 -BasePythonExe .\.venv\Scripts\python.exe
+```
+
+This helper:
+
+- preserves the same blocking gates and fixed candidate derivation
+- does not replace the underlying evidence files
+- writes a concise disposable evidence index under `reports/packaged-candidate-rehearsal/<timestamp>/packaged-candidate-evidence-index.json`
+- does not elevate optional supportive evidence into a new blocking gate
+
 Step-specific preconditions:
 
 - `verify_release_readiness.ps1`
