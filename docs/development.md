@@ -578,10 +578,17 @@ The index filename is:
 packaged-candidate-evidence-index.json
 ```
 
+The reviewer-facing handoff filename is:
+
+```text
+packaged-candidate-reviewer-summary.md
+```
+
 Important boundary:
 
 - this helper does not redefine the packaged candidate discipline
 - it does not change blocking gates
 - it does not replace the underlying evidence files
 - its evidence index is disposable local output only
+- its reviewer summary is also disposable local output only
 - it is not part of the artifact contract or candidate evidence contract

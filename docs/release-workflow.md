@@ -227,6 +227,7 @@ This helper:
 - preserves the same blocking gates and fixed candidate derivation
 - does not replace the underlying evidence files
 - writes a concise disposable evidence index under `reports/packaged-candidate-rehearsal/<timestamp>/packaged-candidate-evidence-index.json`
+- writes a reviewer-facing handoff summary under `reports/packaged-candidate-rehearsal/<timestamp>/packaged-candidate-reviewer-summary.md`
 - does not elevate optional supportive evidence into a new blocking gate
 
 Step-specific preconditions:

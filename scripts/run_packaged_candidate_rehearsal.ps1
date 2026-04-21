@@ -7,6 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $generatorScript = "scripts/run_packaged_candidate_rehearsal.ps1"
+$reviewerSummaryScript = Join-Path $root "scripts\write_packaged_candidate_reviewer_summary.ps1"
 
 function Resolve-RepoPath {
     param([string]$Value)
@@ -268,6 +269,7 @@ $rehearsalOutputRootResolved = Resolve-RepoPath $RehearsalOutputRoot
 $rehearsalRunDirectory = Join-Path $rehearsalOutputRootResolved (New-UtcTimestamp)
 $logDirectory = Join-Path $rehearsalRunDirectory "logs"
 $evidenceIndexPath = Join-Path $rehearsalRunDirectory "packaged-candidate-evidence-index.json"
+$reviewerSummaryPath = Join-Path $rehearsalRunDirectory "packaged-candidate-reviewer-summary.md"
 New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
 
 $powershellExe = "powershell"
@@ -637,10 +639,26 @@ $indexRecord = [ordered]@{
 
 $indexRecord | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $evidenceIndexPath -Encoding utf8
 
+$reviewerSummaryResult = $null
+if (Test-Path -LiteralPath $reviewerSummaryScript -PathType Leaf) {
+    $reviewerSummaryResult = Invoke-NativeCapture -FilePath $powershellExe -Arguments @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", $reviewerSummaryScript,
+        "-RehearsalRunDirectory", $rehearsalRunDirectory
+    ) -WorkingDirectory $root
+}
+
 Write-Host "Packaged candidate rehearsal completed."
 Write-Host "Rehearsal run directory: $rehearsalRunDirectory"
 Write-Host "Evidence index: $evidenceIndexPath"
+if ($reviewerSummaryResult -and $reviewerSummaryResult.ExitCode -eq 0 -and (Test-Path -LiteralPath $reviewerSummaryPath -PathType Leaf)) {
+    Write-Host "Reviewer summary: $reviewerSummaryPath"
+}
 Write-Host "Summary: CANDIDATE_OVERALL=$candidateOverall READY_STATE=$($indexRecord.overall.ready_state)"
+
+if ($reviewerSummaryResult -and $reviewerSummaryResult.ExitCode -ne 0) {
+    Write-Warning "Reviewer summary generation failed. Candidate overall was not changed."
+}
 
 if ($candidateOverall -eq "FAIL") {
     exit 1
