@@ -65,6 +65,11 @@ The current packaged candidate `PASS` means:
 - it is not a promotion of supportive evidence into blocking gates
 - it is not a change to acceptance script responsibilities
 
+Current repo-tracked records for the active `v0.1.0` formal release-prep path are:
+
+- [release-decision-v0.1.0.md](release-decision-v0.1.0.md)
+- [release-notes-v0.1.0.md](release-notes-v0.1.0.md)
+
 ## Minimum Repo-Tracked Prerequisites Before Real Release Action
 
 Actual release execution still requires:
