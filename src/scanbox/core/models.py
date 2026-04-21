@@ -27,6 +27,9 @@ class TargetInfo(BaseModel):
     detected_type: str
     extension: str | None = None
     mime_guess: str | None = None
+    archive_path: str | None = None
+    archive_member_path: str | None = None
+    archive_depth: int | None = None
 
 
 class DirectoryTargetInfo(BaseModel):
@@ -97,6 +100,21 @@ class QuarantineAction(BaseModel):
     audit_path: str | None = None
 
 
+class ArchiveMemberResult(BaseModel):
+    member_path: str
+    report: ScanReport
+
+
+class ArchiveExpansionReport(BaseModel):
+    archive_kind: Literal["zip"] = "zip"
+    expansion_depth: int
+    max_expansion_depth: int
+    member_count: int = 0
+    scanned_member_count: int = 0
+    total_extracted_bytes: int = 0
+    results: list[ArchiveMemberResult] = Field(default_factory=list)
+
+
 class ScanReport(BaseModel):
     schema_version: str = "1.0.0"
     scanbox_version: str = __version__
@@ -128,6 +146,7 @@ class ScanReport(BaseModel):
     )
     issues: list[EngineIssue] = Field(default_factory=list)
     summary: dict[str, Any] = Field(default_factory=dict)
+    archive_expansion: ArchiveExpansionReport | None = None
 
 
 class DirectoryScanEntry(BaseModel):
@@ -199,3 +218,8 @@ def build_directory_report_shell(original_path: str, profile: ScanProfile) -> Di
             recursive=True,
         ),
     )
+
+
+ArchiveMemberResult.model_rebuild()
+ArchiveExpansionReport.model_rebuild()
+ScanReport.model_rebuild()

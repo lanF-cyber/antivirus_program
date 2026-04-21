@@ -3,6 +3,8 @@ from pathlib import Path
 
 from scanbox.core.enums import EngineState, ScanProfile, VerdictStatus
 from scanbox.core.models import (
+    ArchiveExpansionReport,
+    ArchiveMemberResult,
     Detection,
     DirectoryScanAccounting,
     DirectoryScanEntry,
@@ -184,6 +186,46 @@ def make_directory_report_with_mixed_counts() -> DirectoryScanReport:
         ),
         results=[],
     )
+
+
+def make_archive_report() -> ScanReport:
+    parent_report = make_report()
+    child_report = make_report()
+    child_report.target = TargetInfo(
+        original_path="sample.zip::nested/sample.exe",
+        normalized_path=str(Path("nested-sample.exe").resolve()),
+        size=321,
+        detected_type="pe",
+        extension=".exe",
+        mime_guess="application/vnd.microsoft.portable-executable",
+        archive_path=str(Path("sample.zip").resolve()),
+        archive_member_path="nested/sample.exe",
+        archive_depth=1,
+    )
+    parent_report.archive_expansion = ArchiveExpansionReport(
+        expansion_depth=0,
+        max_expansion_depth=1,
+        member_count=1,
+        scanned_member_count=1,
+        total_extracted_bytes=321,
+        results=[
+            ArchiveMemberResult(
+                member_path="nested/sample.exe",
+                report=child_report,
+            )
+        ],
+    )
+    parent_report.summary = {
+        "engine_count": 1,
+        "detections": 0,
+        "known_malicious_hits": 0,
+        "suspicious_hits": 0,
+        "archive_member_count": 1,
+        "archive_scanned_member_count": 1,
+        "archive_total_extracted_bytes": 321,
+        "status": parent_report.overall_status.value,
+    }
+    return parent_report
 
 
 def test_serialize_report_default_compacts_capa_raw_summary() -> None:
@@ -499,6 +541,33 @@ def test_emit_directory_report_uses_default_for_stdout_and_full_for_report_out(c
     assert "meta" in file_payload["results"][0]["report"]["engines"]["capa"]["raw_summary"]
     assert stdout_payload["overall_status"] == file_payload["overall_status"]
     assert stdout_payload["accounting"] == file_payload["accounting"]
+
+
+def test_serialize_report_default_compacts_nested_archive_member_raw_summary() -> None:
+    report = make_archive_report()
+
+    default_payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    full_payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
+
+    nested_default = default_payload["archive_expansion"]["results"][0]["report"]["engines"]["capa"]["raw_summary"]
+    nested_full = full_payload["archive_expansion"]["results"][0]["report"]["engines"]["capa"]["raw_summary"]
+
+    assert nested_default == {
+        "returncode": 0,
+        "rule_count": 21,
+        "result_summary": "21 capability rule(s) matched",
+        "analysis_summary": {
+            "capa_version": "9.3.1",
+            "flavor": "static",
+            "format": "pe",
+            "arch": "amd64",
+            "os": "windows",
+            "extractor": "VivisectFeatureExtractor",
+            "matched_rule_count": 21,
+        },
+    }
+    assert "meta" in nested_full
+    assert default_payload["archive_expansion"]["results"][0]["report"]["target"]["archive_member_path"] == "nested/sample.exe"
 
 
 def test_build_directory_error_report_keeps_error_count_semantics_and_accounting() -> None:

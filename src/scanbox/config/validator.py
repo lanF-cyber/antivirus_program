@@ -37,6 +37,12 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("timeouts.yara_seconds must be greater than zero")
     if config.timeouts.capa_seconds <= 0:
         raise ConfigError("timeouts.capa_seconds must be greater than zero")
+    if config.directory_scan.max_archive_expansion_depth < 0:
+        raise ConfigError("directory_scan.max_archive_expansion_depth must be greater than or equal to zero")
+    if config.directory_scan.max_archive_member_count <= 0:
+        raise ConfigError("directory_scan.max_archive_member_count must be greater than zero")
+    if config.directory_scan.max_archive_total_bytes <= 0:
+        raise ConfigError("directory_scan.max_archive_total_bytes must be greater than zero")
 
     for name, engine in {
         "clamav": config.engines.clamav,

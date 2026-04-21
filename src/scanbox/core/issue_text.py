@@ -144,6 +144,18 @@ def failure_summary(*candidates: str | None) -> str | None:
 def scanbox_issue(code: str, *, clue: str | None = None) -> str:
     if code == "config_error":
         return _append_clue("Configuration is invalid.", clue)
+    if code == "archive_byte_budget_exceeded":
+        return _append_clue("Archive expansion stopped after the extracted byte budget was reached.", clue)
+    if code == "archive_corrupt":
+        return _append_clue("Archive could not be expanded because it is corrupt or unreadable.", clue)
+    if code == "archive_depth_limit_exceeded":
+        return _append_clue("Archive expansion stopped after the configured depth limit was reached.", clue)
+    if code == "archive_member_limit_exceeded":
+        return _append_clue("Archive expansion stopped after the configured member limit was reached.", clue)
+    if code == "archive_member_unsupported":
+        return _append_clue("Archive member was skipped because its form is unsupported.", clue)
+    if code == "archive_password_protected":
+        return _append_clue("Archive member was skipped because it is password protected.", clue)
     if code == "directory_access_error":
         return _append_clue("Could not access directory.", clue)
     if code == "file_access_error":

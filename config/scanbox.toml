@@ -33,3 +33,7 @@ ignored_directory_names = [".git", ".venv", "__pycache__"]
 ignored_file_names = []
 ignored_suffixes = []
 ignored_patterns = []
+zip_expansion_enabled = true
+max_archive_expansion_depth = 1
+max_archive_member_count = 256
+max_archive_total_bytes = 134217728

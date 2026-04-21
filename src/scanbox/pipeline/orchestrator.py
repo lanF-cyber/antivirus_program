@@ -28,6 +28,7 @@ from scanbox.core.models import (
     build_directory_report_shell,
     build_report_shell,
 )
+from scanbox.pipeline.archive_expansion import ArchiveExpansionBudget, expand_zip_archive
 from scanbox.pipeline.directory_scan_policy import DirectoryScanPolicy
 from scanbox.core.timeouts import TimeoutPolicy
 from scanbox.pipeline.preflight import apply_preflight
@@ -64,7 +65,7 @@ class ScanOrchestrator:
 
     def scan_file(self, file_path: Path, quarantine_mode: QuarantineMode, dry_run_quarantine: bool) -> ScanReport:
         target = FileTarget.from_path(file_path)
-        return self._scan_file_target(
+        return self._scan_file_target_with_archive_expansion(
             target=target,
             original_path=str(target.path),
             quarantine_mode=quarantine_mode,
@@ -131,6 +132,10 @@ class ScanOrchestrator:
         original_path: str,
         quarantine_mode: QuarantineMode,
         dry_run_quarantine: bool,
+        archive_path: str | None = None,
+        archive_member_path: str | None = None,
+        archive_depth: int | None = None,
+        allow_quarantine: bool = True,
     ) -> ScanReport:
         report = build_report_shell(original_path, self.config.app.default_profile)
         report.quarantine.requested_mode = quarantine_mode.value
@@ -146,6 +151,9 @@ class ScanOrchestrator:
                 detected_type=file_type.kind,
                 extension=target.extension,
                 mime_guess=file_type.mime_guess,
+                archive_path=archive_path,
+                archive_member_path=archive_member_path,
+                archive_depth=archive_depth,
             )
 
             report.engines = apply_preflight(self.adapters, target, report, self.config)
@@ -165,7 +173,8 @@ class ScanOrchestrator:
                 report.issues.extend(result.issues)
 
             report.overall_status = self.verdicts.resolve(report)
-            report.quarantine = self.quarantine.maybe_apply(report, target, quarantine_mode, dry_run_quarantine)
+            if allow_quarantine:
+                report.quarantine = self.quarantine.maybe_apply(report, target, quarantine_mode, dry_run_quarantine)
             report.summary = self._build_summary(report)
             report.ended_at = datetime.now(timezone.utc)
             report.disclaimer = DISCLAIMER_TEXT
@@ -184,12 +193,23 @@ class ScanOrchestrator:
             return report
 
     def _build_summary(self, report: ScanReport) -> dict:
-        detections = [detection for result in report.engines.values() for detection in result.detections]
+        detections = [
+            detection
+            for nested_report in self._iter_report_tree(report)
+            for result in nested_report.engines.values()
+            for detection in result.detections
+        ]
+        archive_member_count, archive_scanned_member_count, archive_total_extracted_bytes = self._collect_archive_accounting(
+            report
+        )
         return {
             "engine_count": len(report.engines),
             "detections": len(detections),
             "known_malicious_hits": len([d for d in detections if d.category == "malicious"]),
             "suspicious_hits": len([d for d in detections if d.category == "suspicious"]),
+            "archive_member_count": archive_member_count,
+            "archive_scanned_member_count": archive_scanned_member_count,
+            "archive_total_extracted_bytes": archive_total_extracted_bytes,
             "status": report.overall_status.value,
         }
 
@@ -206,12 +226,89 @@ class ScanOrchestrator:
         except OSError as exc:
             return self._build_file_error_report(file_path, "file_access_error", str(exc))
 
-        return self._scan_file_target(
+        return self._scan_file_target_with_archive_expansion(
             target=target,
             original_path=str(target.path),
             quarantine_mode=quarantine_mode,
             dry_run_quarantine=dry_run_quarantine,
         )
+
+    def _scan_file_target_with_archive_expansion(
+        self,
+        target: FileTarget,
+        original_path: str,
+        quarantine_mode: QuarantineMode,
+        dry_run_quarantine: bool,
+        archive_root_path: str | None = None,
+        archive_member_path: str | None = None,
+        archive_depth: int | None = None,
+        budget: ArchiveExpansionBudget | None = None,
+    ) -> ScanReport:
+        report = self._scan_file_target(
+            target=target,
+            original_path=original_path,
+            quarantine_mode=quarantine_mode,
+            dry_run_quarantine=dry_run_quarantine,
+            archive_path=archive_root_path,
+            archive_member_path=archive_member_path,
+            archive_depth=archive_depth,
+            allow_quarantine=archive_member_path is None,
+        )
+        container_status = report.overall_status
+
+        if not self.config.directory_scan.zip_expansion_enabled:
+            return report
+        if report.target.detected_type != "zip_archive":
+            return report
+
+        current_archive_depth = archive_depth or 0
+        max_depth = self.config.directory_scan.max_archive_expansion_depth
+        if current_archive_depth >= max_depth:
+            if archive_member_path is not None:
+                report.issues.append(
+                    self._build_archive_issue(
+                        code="archive_depth_limit_exceeded",
+                        archive_path=archive_root_path or str(target.path),
+                        member_path=archive_member_path,
+                        details={"max_archive_expansion_depth": max_depth},
+                    )
+                )
+                report.overall_status = self._resolve_archive_aware_overall_status(report, container_status)
+                report.summary = self._build_summary(report)
+            return report
+
+        active_budget = budget or ArchiveExpansionBudget(
+            max_member_count=self.config.directory_scan.max_archive_member_count,
+            max_total_bytes=self.config.directory_scan.max_archive_total_bytes,
+        )
+        effective_archive_root = archive_root_path or str(target.path)
+
+        def _scan_member(extracted_path: Path, member_path: str) -> ScanReport:
+            child_target = FileTarget.from_path(extracted_path)
+            full_member_path = member_path if archive_member_path is None else f"{archive_member_path}::{member_path}"
+            return self._scan_file_target_with_archive_expansion(
+                target=child_target,
+                original_path=f"{effective_archive_root}::{full_member_path}",
+                quarantine_mode=quarantine_mode,
+                dry_run_quarantine=dry_run_quarantine,
+                archive_root_path=effective_archive_root,
+                archive_member_path=full_member_path,
+                archive_depth=current_archive_depth + 1,
+                budget=active_budget,
+            )
+
+        archive_expansion, archive_issues = expand_zip_archive(
+            archive_path=target.path,
+            expansion_depth=current_archive_depth,
+            max_expansion_depth=max_depth,
+            budget=active_budget,
+            scan_member=_scan_member,
+        )
+        report.archive_expansion = archive_expansion
+        report.issues.extend(archive_issues)
+        report.overall_status = self._resolve_archive_aware_overall_status(report, container_status)
+        report.summary = self._build_summary(report)
+        return report
 
     def _enumerate_directory_files(
         self,
@@ -267,6 +364,88 @@ class ScanOrchestrator:
                 return VerdictStatus(status)
 
         return VerdictStatus.SCAN_ERROR
+
+    def _resolve_archive_aware_overall_status(
+        self,
+        report: ScanReport,
+        container_status: VerdictStatus,
+    ) -> VerdictStatus:
+        present_statuses = {container_status.value}
+        present_statuses.update(
+            nested_report.overall_status.value
+            for nested_report in self._iter_report_tree(report)
+            if nested_report is not report
+        )
+
+        issue_codes = {
+            issue.code
+            for nested_report in self._iter_report_tree(report)
+            for issue in nested_report.issues
+        }
+        if "archive_corrupt" in issue_codes:
+            present_statuses.add(VerdictStatus.SCAN_ERROR.value)
+        if issue_codes.intersection(
+            {
+                "archive_password_protected",
+                "archive_member_unsupported",
+                "archive_depth_limit_exceeded",
+                "archive_member_limit_exceeded",
+                "archive_byte_budget_exceeded",
+            }
+        ):
+            present_statuses.add(VerdictStatus.PARTIAL_SCAN.value)
+
+        for status in self._VERDICT_PRIORITY:
+            if status in present_statuses:
+                return VerdictStatus(status)
+
+        return VerdictStatus.SCAN_ERROR
+
+    def _iter_report_tree(self, report: ScanReport):
+        yield report
+        if report.archive_expansion is None:
+            return
+        for result in report.archive_expansion.results:
+            yield from self._iter_report_tree(result.report)
+
+    def _collect_archive_accounting(self, report: ScanReport) -> tuple[int, int, int]:
+        if report.archive_expansion is None:
+            return (0, 0, 0)
+
+        member_count = report.archive_expansion.member_count
+        scanned_member_count = report.archive_expansion.scanned_member_count
+        total_extracted_bytes = report.archive_expansion.total_extracted_bytes
+        for result in report.archive_expansion.results:
+            child_member_count, child_scanned_member_count, child_total_extracted_bytes = self._collect_archive_accounting(
+                result.report
+            )
+            member_count += child_member_count
+            scanned_member_count += child_scanned_member_count
+            total_extracted_bytes += child_total_extracted_bytes
+
+        return member_count, scanned_member_count, total_extracted_bytes
+
+    def _build_archive_issue(
+        self,
+        *,
+        code: str,
+        archive_path: str,
+        member_path: str | None = None,
+        clue: str | None = None,
+        details: dict[str, object] | None = None,
+    ) -> EngineIssue:
+        issue_details: dict[str, object] = {"archive_path": archive_path}
+        if member_path is not None:
+            issue_details["member_path"] = member_path
+        if details:
+            issue_details.update(details)
+
+        return EngineIssue(
+            engine="scanbox",
+            code=code,
+            message=issue_text.scanbox_issue(code, clue=clue),
+            details=issue_details,
+        )
 
     def _refresh_directory_accounting(self, report: DirectoryScanReport) -> None:
         report.accounting.top_level_issue_count = len(report.issues)

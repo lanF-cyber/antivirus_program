@@ -43,6 +43,10 @@ class DirectoryScanSettings(BaseModel):
     ignored_file_names: list[str] = Field(default_factory=list)
     ignored_suffixes: list[str] = Field(default_factory=list)
     ignored_patterns: list[str] = Field(default_factory=list)
+    zip_expansion_enabled: bool = True
+    max_archive_expansion_depth: int = 1
+    max_archive_member_count: int = 256
+    max_archive_total_bytes: int = 134217728
 
 
 class AppConfig(BaseModel):

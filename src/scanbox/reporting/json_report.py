@@ -98,26 +98,35 @@ def _compact_yara_raw_summary(raw_summary: dict[str, Any]) -> dict[str, Any]:
 
 def _compact_scan_report_payload(payload: dict[str, Any]) -> dict[str, Any]:
     engines = payload.get("engines")
-    if not isinstance(engines, dict):
-        return payload
+    if isinstance(engines, dict):
+        capa = engines.get("capa")
+        if isinstance(capa, dict):
+            raw_summary = capa.get("raw_summary")
+            if isinstance(raw_summary, dict):
+                capa["raw_summary"] = _compact_capa_raw_summary(raw_summary)
 
-    capa = engines.get("capa")
-    if isinstance(capa, dict):
-        raw_summary = capa.get("raw_summary")
-        if isinstance(raw_summary, dict):
-            capa["raw_summary"] = _compact_capa_raw_summary(raw_summary)
+        clamav = engines.get("clamav")
+        if isinstance(clamav, dict):
+            raw_summary = clamav.get("raw_summary")
+            if isinstance(raw_summary, dict):
+                clamav["raw_summary"] = _compact_clamav_raw_summary(raw_summary)
 
-    clamav = engines.get("clamav")
-    if isinstance(clamav, dict):
-        raw_summary = clamav.get("raw_summary")
-        if isinstance(raw_summary, dict):
-            clamav["raw_summary"] = _compact_clamav_raw_summary(raw_summary)
+        yara = engines.get("yara")
+        if isinstance(yara, dict):
+            raw_summary = yara.get("raw_summary")
+            if isinstance(raw_summary, dict):
+                yara["raw_summary"] = _compact_yara_raw_summary(raw_summary)
 
-    yara = engines.get("yara")
-    if isinstance(yara, dict):
-        raw_summary = yara.get("raw_summary")
-        if isinstance(raw_summary, dict):
-            yara["raw_summary"] = _compact_yara_raw_summary(raw_summary)
+    archive_expansion = payload.get("archive_expansion")
+    if isinstance(archive_expansion, dict):
+        results = archive_expansion.get("results")
+        if isinstance(results, list):
+            for entry in results:
+                if not isinstance(entry, dict):
+                    continue
+                report_payload = entry.get("report")
+                if isinstance(report_payload, dict):
+                    entry["report"] = _compact_scan_report_payload(report_payload)
 
     return payload
 
