@@ -85,6 +85,31 @@ def test_quarantine_dry_run_for_known_malicious(tmp_path: Path) -> None:
     assert sample.exists()
 
 
+def test_quarantine_move_for_known_malicious_keeps_non_archive_reason_and_audit_shape(tmp_path: Path) -> None:
+    config = make_config(tmp_path)
+    service = QuarantineService(config)
+    report = make_report()
+    sample = tmp_path / "sample.bin"
+    sample.write_bytes(b"malicious")
+
+    action = service.maybe_apply(
+        report=report,
+        target=FileTarget.from_path(sample),
+        requested_mode=QuarantineMode.MOVE,
+        dry_run=False,
+    )
+
+    assert action.performed is True
+    assert action.reason == "moved_to_quarantine"
+    assert action.archive_triggered is False
+    assert action.archive_member_paths == []
+
+    payload = read_audit_payload(Path(action.audit_path))
+    assert payload["reason"] == "known_malicious"
+    assert payload["archive_triggered"] is False
+    assert payload["archive_member_paths"] == []
+
+
 def test_new_audit_record_includes_state_and_events(tmp_path: Path) -> None:
     _, _, _, audit_path = create_quarantined_record(tmp_path)
     payload = read_audit_payload(audit_path)

@@ -98,6 +98,8 @@ class QuarantineAction(BaseModel):
     moved_at: datetime | None = None
     reason: str | None = None
     audit_path: str | None = None
+    archive_triggered: bool = False
+    archive_member_paths: list[str] = Field(default_factory=list)
 
 
 class ArchiveMemberResult(BaseModel):

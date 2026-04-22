@@ -307,6 +307,16 @@ class ScanOrchestrator:
         report.archive_expansion = archive_expansion
         report.issues.extend(archive_issues)
         report.overall_status = self._resolve_archive_aware_overall_status(report, container_status)
+        if archive_member_path is None and container_status != VerdictStatus.KNOWN_MALICIOUS:
+            archive_quarantine_trigger_paths = self._collect_archive_member_quarantine_trigger_paths(report)
+            if archive_quarantine_trigger_paths:
+                report.quarantine = self.quarantine.maybe_apply(
+                    report,
+                    target,
+                    quarantine_mode,
+                    dry_run_quarantine,
+                    archive_member_paths=archive_quarantine_trigger_paths,
+                )
         report.summary = self._build_summary(report)
         return report
 
@@ -424,6 +434,23 @@ class ScanOrchestrator:
             total_extracted_bytes += child_total_extracted_bytes
 
         return member_count, scanned_member_count, total_extracted_bytes
+
+    def _collect_archive_member_quarantine_trigger_paths(self, report: ScanReport) -> list[str]:
+        trigger_paths: list[str] = []
+        for nested_report in self._iter_report_tree(report):
+            if nested_report is report:
+                continue
+            if nested_report.target.archive_member_path is None:
+                continue
+            if nested_report.overall_status != VerdictStatus.KNOWN_MALICIOUS:
+                continue
+            if any(
+                detection.category == "malicious" and detection.confidence == "high"
+                for result in nested_report.engines.values()
+                for detection in result.detections
+            ):
+                trigger_paths.append(nested_report.target.archive_member_path)
+        return list(dict.fromkeys(trigger_paths))
 
     def _build_archive_issue(
         self,

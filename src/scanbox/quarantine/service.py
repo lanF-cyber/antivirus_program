@@ -31,7 +31,10 @@ class QuarantineService:
         target: FileTarget,
         requested_mode: QuarantineMode,
         dry_run: bool,
+        archive_member_paths: list[str] | None = None,
     ) -> QuarantineAction:
+        normalized_archive_member_paths = list(dict.fromkeys(archive_member_paths or []))
+        archive_triggered = len(normalized_archive_member_paths) > 0
         destination = self._build_destination(target.path)
         action = QuarantineAction(
             requested_mode=requested_mode.value,
@@ -39,6 +42,8 @@ class QuarantineService:
             performed=False,
             original_path=str(target.path),
             quarantine_path=str(destination),
+            archive_triggered=archive_triggered,
+            archive_member_paths=normalized_archive_member_paths,
         )
 
         if requested_mode == QuarantineMode.OFF:
@@ -50,11 +55,17 @@ class QuarantineService:
             return action
 
         if requested_mode == QuarantineMode.ASK:
-            action.reason = "user_confirmation_required"
+            action.reason = (
+                "user_confirmation_required_archive_member_known_malicious"
+                if archive_triggered
+                else "user_confirmation_required"
+            )
             return action
 
         if dry_run:
-            action.reason = "dry_run_requested"
+            action.reason = (
+                "dry_run_requested_archive_member_known_malicious" if archive_triggered else "dry_run_requested"
+            )
             return action
 
         try:
@@ -62,14 +73,17 @@ class QuarantineService:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(target.path), str(destination))
             action.performed = True
-            action.reason = "moved_to_quarantine"
+            action.reason = "archive_member_known_malicious" if archive_triggered else "moved_to_quarantine"
             action.moved_at = moved_at
+            audit_reason = action.reason if archive_triggered else report.overall_status.value
             audit_path = write_audit_record(
                 report,
                 target.path,
                 destination,
-                reason=report.overall_status.value,
+                reason=audit_reason,
                 moved_at=moved_at.isoformat(),
+                archive_triggered=archive_triggered,
+                archive_member_paths=normalized_archive_member_paths,
             )
             action.audit_path = str(audit_path)
             return action

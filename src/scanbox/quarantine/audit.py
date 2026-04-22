@@ -42,8 +42,11 @@ def build_audit_record(
     quarantine_path: Path,
     reason: str,
     moved_at: str | None = None,
+    archive_triggered: bool = False,
+    archive_member_paths: list[str] | None = None,
 ) -> dict[str, Any]:
     event_time = moved_at or utc_now_iso()
+    normalized_archive_member_paths = list(archive_member_paths or [])
     return {
         "audit_schema_version": AUDIT_SCHEMA_VERSION,
         "scan_id": report.scan_id,
@@ -52,6 +55,8 @@ def build_audit_record(
         "quarantine_path": str(quarantine_path),
         "moved_at": event_time,
         "reason": reason,
+        "archive_triggered": archive_triggered,
+        "archive_member_paths": normalized_archive_member_paths,
         "hashes": report.hashes.model_dump(),
         "state": "quarantined",
         "state_changed_at": event_time,
@@ -65,6 +70,8 @@ def build_audit_record(
                 details={
                     "reason": reason,
                     "overall_status": report.overall_status.value,
+                    "archive_triggered": archive_triggered,
+                    "archive_member_paths": normalized_archive_member_paths,
                 },
             )
         ],
@@ -77,9 +84,19 @@ def write_audit_record(
     quarantine_path: Path,
     reason: str,
     moved_at: str | None = None,
+    archive_triggered: bool = False,
+    archive_member_paths: list[str] | None = None,
 ) -> Path:
     audit_path = quarantine_path.with_suffix(quarantine_path.suffix + AUDIT_SUFFIX)
-    audit_payload = build_audit_record(report, original_path, quarantine_path, reason, moved_at=moved_at)
+    audit_payload = build_audit_record(
+        report,
+        original_path,
+        quarantine_path,
+        reason,
+        moved_at=moved_at,
+        archive_triggered=archive_triggered,
+        archive_member_paths=archive_member_paths,
+    )
     audit_path.write_text(json.dumps(audit_payload, indent=2), encoding="utf-8")
     return audit_path
 

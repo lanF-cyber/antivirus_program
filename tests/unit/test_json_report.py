@@ -545,6 +545,9 @@ def test_emit_directory_report_uses_default_for_stdout_and_full_for_report_out(c
 
 def test_serialize_report_default_compacts_nested_archive_member_raw_summary() -> None:
     report = make_archive_report()
+    report.quarantine.archive_triggered = True
+    report.quarantine.archive_member_paths = ["nested/sample.exe"]
+    report.quarantine.reason = "archive_member_known_malicious"
 
     default_payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
     full_payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
@@ -568,6 +571,9 @@ def test_serialize_report_default_compacts_nested_archive_member_raw_summary() -
     }
     assert "meta" in nested_full
     assert default_payload["archive_expansion"]["results"][0]["report"]["target"]["archive_member_path"] == "nested/sample.exe"
+    assert default_payload["quarantine"]["archive_triggered"] is True
+    assert default_payload["quarantine"]["archive_member_paths"] == ["nested/sample.exe"]
+    assert default_payload["quarantine"]["reason"] == "archive_member_known_malicious"
 
 
 def test_build_directory_error_report_keeps_error_count_semantics_and_accounting() -> None:
