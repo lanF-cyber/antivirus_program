@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -66,14 +67,31 @@ def _write_zip(zip_path: Path, members: dict[str, bytes]) -> None:
             archive.writestr(name, content)
 
 
+def _tar_write_mode(archive_path: Path) -> str:
+    lower_name = archive_path.name.lower()
+    if lower_name.endswith((".tar.gz", ".tgz")):
+        return "w:gz"
+    if lower_name.endswith((".tar.bz2", ".tbz2")):
+        return "w:bz2"
+    if lower_name.endswith((".tar.xz", ".txz")):
+        return "w:xz"
+    return "w"
+
+
+def _write_tar(archive_path: Path, members: dict[str, bytes]) -> None:
+    with tarfile.open(archive_path, _tar_write_mode(archive_path)) as archive:
+        for name, content in members.items():
+            info = tarfile.TarInfo(name=name)
+            info.size = len(content)
+            archive.addfile(info, BytesIO(content))
+
+
 def _build_zip_bytes(members: dict[str, bytes]) -> bytes:
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in members.items():
             archive.writestr(name, content)
     return buffer.getvalue()
-
-
 def _mark_zip_entry_encrypted(zip_path: Path, entry_name: str) -> None:
     data = bytearray(zip_path.read_bytes())
     with zipfile.ZipFile(zip_path) as archive:
@@ -122,6 +140,24 @@ def test_direct_zip_input_with_one_clean_member(tmp_path: Path) -> None:
     assert report.summary["archive_scanned_member_count"] == 1
 
 
+def test_direct_tar_input_with_one_clean_member(tmp_path: Path) -> None:
+    tar_path = tmp_path / "clean.tar"
+    _write_tar(tar_path, {"hello.txt": b"hello world"})
+    orchestrator = ScanOrchestrator(_build_config(tmp_path), adapters=[FakeArchiveAdapter()])
+
+    report = orchestrator.scan_file(tar_path, quarantine_mode=QuarantineMode.ASK, dry_run_quarantine=False)
+
+    assert report.overall_status == VerdictStatus.CLEAN_BY_KNOWN_CHECKS
+    assert report.archive_expansion is not None
+    assert report.archive_expansion.archive_kind == "tar"
+    assert report.archive_expansion.member_count == 1
+    assert report.archive_expansion.scanned_member_count == 1
+    child = report.archive_expansion.results[0].report
+    assert child.target.archive_path == str(tar_path.resolve())
+    assert child.target.archive_member_path == "hello.txt"
+    assert child.target.archive_depth == 1
+
+
 def test_direct_zip_input_with_one_detectable_member(tmp_path: Path) -> None:
     zip_path = tmp_path / "detectable.zip"
     _write_zip(zip_path, {"nested/eicar.com": b"EICAR test signature"})
@@ -135,6 +171,22 @@ def test_direct_zip_input_with_one_detectable_member(tmp_path: Path) -> None:
     assert child.overall_status == VerdictStatus.KNOWN_MALICIOUS
     assert child.target.archive_member_path == "nested/eicar.com"
     assert report.summary["known_malicious_hits"] == 1
+    assert report.quarantine.performed is False
+
+
+def test_direct_tar_gz_input_with_one_detectable_member(tmp_path: Path) -> None:
+    tar_path = tmp_path / "detectable.tar.gz"
+    _write_tar(tar_path, {"nested/eicar.com": b"EICAR test signature"})
+    orchestrator = ScanOrchestrator(_build_config(tmp_path), adapters=[FakeArchiveAdapter()])
+
+    report = orchestrator.scan_file(tar_path, quarantine_mode=QuarantineMode.ASK, dry_run_quarantine=False)
+
+    assert report.overall_status == VerdictStatus.KNOWN_MALICIOUS
+    assert report.archive_expansion is not None
+    assert report.archive_expansion.archive_kind == "tar"
+    child = report.archive_expansion.results[0].report
+    assert child.overall_status == VerdictStatus.KNOWN_MALICIOUS
+    assert child.target.archive_member_path == "nested/eicar.com"
     assert report.quarantine.performed is False
 
 
@@ -196,6 +248,27 @@ def test_directory_scan_finds_zip_and_reports_member_finding(tmp_path: Path) -> 
     assert child.overall_status == VerdictStatus.KNOWN_MALICIOUS
 
 
+def test_directory_scan_finds_tar_family_archive_and_reports_member_finding(tmp_path: Path) -> None:
+    root = tmp_path / "scan-root"
+    root.mkdir()
+    tar_path = root / "sample.tgz"
+    _write_tar(tar_path, {"nested/eicar.com": b"EICAR test signature"})
+    orchestrator = ScanOrchestrator(_build_config(tmp_path), adapters=[FakeArchiveAdapter()])
+
+    report = orchestrator.scan_directory(root, quarantine_mode=QuarantineMode.ASK, dry_run_quarantine=False)
+
+    assert report.overall_status == VerdictStatus.KNOWN_MALICIOUS
+    assert report.target_count == 1
+    assert report.scanned_count == 1
+    assert report.results[0].relative_path == "sample.tgz"
+    assert report.results[0].report.archive_expansion is not None
+    assert report.results[0].report.archive_expansion.archive_kind == "tar"
+    child = report.results[0].report.archive_expansion.results[0].report
+    assert child.target.archive_path == str(tar_path.resolve())
+    assert child.target.archive_member_path == "nested/eicar.com"
+    assert child.overall_status == VerdictStatus.KNOWN_MALICIOUS
+
+
 def test_directory_scan_zip_with_malicious_member_triggers_container_quarantine(tmp_path: Path) -> None:
     root = tmp_path / "scan-root"
     root.mkdir()
@@ -222,6 +295,17 @@ def test_corrupt_zip_returns_structured_issue(tmp_path: Path) -> None:
     orchestrator = ScanOrchestrator(_build_config(tmp_path), adapters=[FakeArchiveAdapter()])
 
     report = orchestrator.scan_file(zip_path, quarantine_mode=QuarantineMode.ASK, dry_run_quarantine=False)
+
+    assert report.overall_status == VerdictStatus.SCAN_ERROR
+    assert any(issue.code == "archive_corrupt" for issue in report.issues)
+
+
+def test_corrupt_tar_family_archive_returns_structured_issue(tmp_path: Path) -> None:
+    tar_path = tmp_path / "corrupt.tar.gz"
+    tar_path.write_bytes(b"not-a-valid-tar")
+    orchestrator = ScanOrchestrator(_build_config(tmp_path), adapters=[FakeArchiveAdapter()])
+
+    report = orchestrator.scan_file(tar_path, quarantine_mode=QuarantineMode.ASK, dry_run_quarantine=False)
 
     assert report.overall_status == VerdictStatus.SCAN_ERROR
     assert any(issue.code == "archive_corrupt" for issue in report.issues)
@@ -262,6 +346,28 @@ def test_archive_expansion_limit_hit_returns_structured_issue(tmp_path: Path) ->
     assert report.archive_expansion.scanned_member_count == 1
 
 
+def test_tar_archive_member_limit_hit_returns_structured_issue(tmp_path: Path) -> None:
+    tar_path = tmp_path / "limit.tar"
+    _write_tar(
+        tar_path,
+        {
+            "one.txt": b"one",
+            "two.txt": b"two",
+        },
+    )
+    settings = DirectoryScanSettings(max_archive_member_count=1)
+    orchestrator = ScanOrchestrator(_build_config(tmp_path, directory_scan=settings), adapters=[FakeArchiveAdapter()])
+
+    report = orchestrator.scan_file(tar_path, quarantine_mode=QuarantineMode.ASK, dry_run_quarantine=False)
+
+    assert report.overall_status == VerdictStatus.PARTIAL_SCAN
+    assert any(issue.code == "archive_member_limit_exceeded" for issue in report.issues)
+    assert report.archive_expansion is not None
+    assert report.archive_expansion.archive_kind == "tar"
+    assert report.archive_expansion.member_count == 2
+    assert report.archive_expansion.scanned_member_count == 1
+
+
 def test_nested_zip_depth_limit_returns_structured_issue(tmp_path: Path) -> None:
     inner_zip_bytes = _build_zip_bytes({"eicar.com": b"EICAR test signature"})
     outer_zip = tmp_path / "outer.zip"
@@ -270,6 +376,23 @@ def test_nested_zip_depth_limit_returns_structured_issue(tmp_path: Path) -> None
     orchestrator = ScanOrchestrator(_build_config(tmp_path, directory_scan=settings), adapters=[FakeArchiveAdapter()])
 
     report = orchestrator.scan_file(outer_zip, quarantine_mode=QuarantineMode.ASK, dry_run_quarantine=False)
+
+    assert report.overall_status == VerdictStatus.PARTIAL_SCAN
+    assert report.archive_expansion is not None
+    nested_report = report.archive_expansion.results[0].report
+    assert nested_report.target.archive_member_path == "nested.zip"
+    assert nested_report.archive_expansion is None
+    assert any(issue.code == "archive_depth_limit_exceeded" for issue in nested_report.issues)
+
+
+def test_nested_tar_zip_depth_limit_returns_structured_issue(tmp_path: Path) -> None:
+    inner_zip_bytes = _build_zip_bytes({"eicar.com": b"EICAR test signature"})
+    outer_tar = tmp_path / "outer.tar"
+    _write_tar(outer_tar, {"nested.zip": inner_zip_bytes})
+    settings = DirectoryScanSettings(max_archive_expansion_depth=1)
+    orchestrator = ScanOrchestrator(_build_config(tmp_path, directory_scan=settings), adapters=[FakeArchiveAdapter()])
+
+    report = orchestrator.scan_file(outer_tar, quarantine_mode=QuarantineMode.ASK, dry_run_quarantine=False)
 
     assert report.overall_status == VerdictStatus.PARTIAL_SCAN
     assert report.archive_expansion is not None
@@ -290,6 +413,23 @@ def test_extracted_member_is_not_quarantined(tmp_path: Path) -> None:
     payload_names = sorted(path.name for path in quarantine_dir.iterdir() if path.is_file() and not path.name.endswith(".audit.json"))
     assert len(payload_names) == 1
     assert payload_names[0].endswith("_container.zip")
+    child = report.archive_expansion.results[0].report
+    assert child.quarantine.performed is False
+    assert child.quarantine.reason is None
+
+
+def test_extracted_tar_member_is_not_quarantined_directly(tmp_path: Path) -> None:
+    tar_path = tmp_path / "container.tar.gz"
+    _write_tar(tar_path, {"nested/eicar.com": b"EICAR test signature"})
+    orchestrator = ScanOrchestrator(_build_config(tmp_path), adapters=[FakeArchiveAdapter()])
+
+    report = orchestrator.scan_file(tar_path, quarantine_mode=QuarantineMode.MOVE, dry_run_quarantine=False)
+
+    assert report.overall_status == VerdictStatus.KNOWN_MALICIOUS
+    assert report.quarantine.performed is False
+    assert report.quarantine.reason == "verdict_not_eligible_for_quarantine"
+    quarantine_dir = tmp_path / "quarantine"
+    assert not quarantine_dir.exists()
     child = report.archive_expansion.results[0].report
     assert child.quarantine.performed is False
     assert child.quarantine.reason is None

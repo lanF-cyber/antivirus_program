@@ -15,6 +15,16 @@ SCRIPT_EXTENSIONS = {
     ".sh": "shell_script",
 }
 
+TAR_ARCHIVE_SUFFIXES = (
+    ".tar",
+    ".tar.gz",
+    ".tgz",
+    ".tar.bz2",
+    ".tbz2",
+    ".tar.xz",
+    ".txz",
+)
+
 MACHO_MAGICS = {
     b"\xfe\xed\xfa\xce",
     b"\xce\xfa\xed\xfe",
@@ -34,6 +44,7 @@ class FileTypeInfo(BaseModel):
 
 def detect_file_type(file_path: Path) -> FileTypeInfo:
     suffix = file_path.suffix.lower()
+    lower_name = file_path.name.lower()
     head = file_path.read_bytes()[:4096]
 
     if head.startswith(b"MZ"):
@@ -48,4 +59,6 @@ def detect_file_type(file_path: Path) -> FileTypeInfo:
         return FileTypeInfo(kind="script", mime_guess="text/plain", is_script=True, capa_supported=False)
     if head.startswith(b"PK\x03\x04"):
         return FileTypeInfo(kind="zip_archive", mime_guess="application/zip", capa_supported=False)
+    if lower_name.endswith(TAR_ARCHIVE_SUFFIXES):
+        return FileTypeInfo(kind="tar_archive", mime_guess="application/x-tar", capa_supported=False)
     return FileTypeInfo(kind="generic_file", mime_guess="application/octet-stream", capa_supported=False)

@@ -188,21 +188,22 @@ def make_directory_report_with_mixed_counts() -> DirectoryScanReport:
     )
 
 
-def make_archive_report() -> ScanReport:
+def make_archive_report(*, archive_kind: str = "zip") -> ScanReport:
     parent_report = make_report()
     child_report = make_report()
     child_report.target = TargetInfo(
-        original_path="sample.zip::nested/sample.exe",
+        original_path=f"sample.{archive_kind}::nested/sample.exe",
         normalized_path=str(Path("nested-sample.exe").resolve()),
         size=321,
         detected_type="pe",
         extension=".exe",
         mime_guess="application/vnd.microsoft.portable-executable",
-        archive_path=str(Path("sample.zip").resolve()),
+        archive_path=str(Path(f"sample.{archive_kind}").resolve()),
         archive_member_path="nested/sample.exe",
         archive_depth=1,
     )
     parent_report.archive_expansion = ArchiveExpansionReport(
+        archive_kind=archive_kind,
         expansion_depth=0,
         max_expansion_depth=1,
         member_count=1,
@@ -574,6 +575,19 @@ def test_serialize_report_default_compacts_nested_archive_member_raw_summary() -
     assert default_payload["quarantine"]["archive_triggered"] is True
     assert default_payload["quarantine"]["archive_member_paths"] == ["nested/sample.exe"]
     assert default_payload["quarantine"]["reason"] == "archive_member_known_malicious"
+
+
+def test_serialize_report_preserves_tar_archive_kind_and_nested_compaction() -> None:
+    report = make_archive_report(archive_kind="tar")
+
+    default_payload = json.loads(serialize_report(report, ReportDetailLevel.DEFAULT))
+    full_payload = json.loads(serialize_report(report, ReportDetailLevel.FULL))
+
+    assert default_payload["archive_expansion"]["archive_kind"] == "tar"
+    assert full_payload["archive_expansion"]["archive_kind"] == "tar"
+    nested_default = default_payload["archive_expansion"]["results"][0]["report"]["engines"]["capa"]["raw_summary"]
+    assert nested_default["rule_count"] == 21
+    assert "meta" not in nested_default
 
 
 def test_build_directory_error_report_keeps_error_count_semantics_and_accounting() -> None:

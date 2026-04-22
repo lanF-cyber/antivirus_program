@@ -28,7 +28,7 @@ from scanbox.core.models import (
     build_directory_report_shell,
     build_report_shell,
 )
-from scanbox.pipeline.archive_expansion import ArchiveExpansionBudget, expand_zip_archive
+from scanbox.pipeline.archive_expansion import ArchiveExpansionBudget, expand_tar_archive, expand_zip_archive
 from scanbox.pipeline.directory_scan_policy import DirectoryScanPolicy
 from scanbox.core.timeouts import TimeoutPolicy
 from scanbox.pipeline.preflight import apply_preflight
@@ -258,7 +258,7 @@ class ScanOrchestrator:
 
         if not self.config.directory_scan.zip_expansion_enabled:
             return report
-        if report.target.detected_type != "zip_archive":
+        if report.target.detected_type not in {"zip_archive", "tar_archive"}:
             return report
 
         current_archive_depth = archive_depth or 0
@@ -297,17 +297,30 @@ class ScanOrchestrator:
                 budget=active_budget,
             )
 
-        archive_expansion, archive_issues = expand_zip_archive(
-            archive_path=target.path,
-            expansion_depth=current_archive_depth,
-            max_expansion_depth=max_depth,
-            budget=active_budget,
-            scan_member=_scan_member,
-        )
+        if report.target.detected_type == "zip_archive":
+            archive_expansion, archive_issues = expand_zip_archive(
+                archive_path=target.path,
+                expansion_depth=current_archive_depth,
+                max_expansion_depth=max_depth,
+                budget=active_budget,
+                scan_member=_scan_member,
+            )
+        else:
+            archive_expansion, archive_issues = expand_tar_archive(
+                archive_path=target.path,
+                expansion_depth=current_archive_depth,
+                max_expansion_depth=max_depth,
+                budget=active_budget,
+                scan_member=_scan_member,
+            )
         report.archive_expansion = archive_expansion
         report.issues.extend(archive_issues)
         report.overall_status = self._resolve_archive_aware_overall_status(report, container_status)
-        if archive_member_path is None and container_status != VerdictStatus.KNOWN_MALICIOUS:
+        if (
+            report.target.detected_type == "zip_archive"
+            and archive_member_path is None
+            and container_status != VerdictStatus.KNOWN_MALICIOUS
+        ):
             archive_quarantine_trigger_paths = self._collect_archive_member_quarantine_trigger_paths(report)
             if archive_quarantine_trigger_paths:
                 report.quarantine = self.quarantine.maybe_apply(

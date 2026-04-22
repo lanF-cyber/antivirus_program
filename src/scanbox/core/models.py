@@ -108,7 +108,7 @@ class ArchiveMemberResult(BaseModel):
 
 
 class ArchiveExpansionReport(BaseModel):
-    archive_kind: Literal["zip"] = "zip"
+    archive_kind: Literal["zip", "tar"] = "zip"
     expansion_depth: int
     max_expansion_depth: int
     member_count: int = 0
